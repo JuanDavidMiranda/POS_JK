@@ -17,5 +17,10 @@ export const routes: Routes = [
     title: 'Inventario',
     loadComponent: () => import('./features/inventory/inventory').then((module) => module.Inventory),
   },
+  {
+    path: 'cargue-masivo',
+    title: 'Cargue Masivo',
+    loadComponent: () => import('./features/bulk-import/bulk-import').then((module) => module.BulkImport),
+  },
   { path: '**', redirectTo: 'pos' },
 ];
