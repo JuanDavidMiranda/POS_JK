@@ -14,6 +14,8 @@ import com.possaas.dto.CustomerDto;
 import com.possaas.dto.ProductDto;
 import com.possaas.dto.SaleItemPayloadDto;
 import com.possaas.dto.SalePayloadDto;
+import com.possaas.dto.SecurityPolicyDto;
+import com.possaas.dto.SupervisorPinDto;
 import com.possaas.dto.SyncEventDto;
 import com.possaas.dto.SyncEventResultDto;
 import com.possaas.dto.SyncPullResponse;
@@ -27,6 +29,7 @@ import com.possaas.repository.SaleItemRepository;
 import com.possaas.repository.SaleRepository;
 import com.possaas.repository.SyncInboxLogRepository;
 import com.possaas.repository.TenantRepository;
+import com.possaas.repository.UserRepository;
 import com.possaas.util.UuidV7;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -58,8 +61,10 @@ public class SyncService {
     private final SaleRepository saleRepository;
     private final SaleItemRepository saleItemRepository;
     private final SyncInboxLogRepository inboxLogRepository;
+    private final UserRepository userRepository;
     private final TenantFilterSupport tenantFilterSupport;
     private final InventoryService inventoryService;
+    private final SecurityService securityService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -105,7 +110,15 @@ public class SyncService {
                 ncLast + 1
         );
 
-        return new SyncPullResponse(Instant.now(), UuidV7.generate(), tenantId, config, products, customers);
+        SecurityPolicyDto securityPolicy = securityService.getPolicy(tenantId);
+        List<SupervisorPinDto> supervisorPins = userRepository
+                .findByTenantIdAndRoleInAndActiveTrueAndSupervisorPinHashIsNotNull(tenantId, List.of("ADMIN", "SUPERVISOR"))
+                .stream()
+                .map(u -> new SupervisorPinDto(u.getId(), u.getFullName(), u.getSupervisorPinHash()))
+                .toList();
+
+        return new SyncPullResponse(Instant.now(), UuidV7.generate(), tenantId, config, products, customers,
+                securityPolicy, supervisorPins);
     }
 
     @Transactional
@@ -192,9 +205,24 @@ public class SyncService {
             }
         }
 
+        BigDecimal discountTotal = payload.discountTotal() == null
+                ? TWO_DECIMALS
+                : payload.discountTotal().setScale(2, RoundingMode.HALF_UP);
+        if (discountTotal.compareTo(BigDecimal.ZERO) < 0) {
+            discountTotal = TWO_DECIMALS;
+        }
+        if (discountTotal.compareTo(subtotal) > 0) {
+            discountTotal = subtotal.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal computedGrand = subtotal.subtract(discountTotal).add(taxTotal).setScale(2, RoundingMode.HALF_UP);
+        if (computedGrand.compareTo(BigDecimal.ZERO) < 0) {
+            computedGrand = TWO_DECIMALS;
+        }
+
         requireSameAmount("subtotal", subtotal, payload.subtotal());
         requireSameAmount("taxTotal", taxTotal, payload.taxTotal());
-        requireSameAmount("grandTotal", subtotal.add(taxTotal), payload.grandTotal());
+        // Compatibilidad: aceptar grandTotal enviado si coincide con cálculo con descuento
+        requireSameAmount("grandTotal", computedGrand, payload.grandTotal());
 
         Sale sale = new Sale();
         sale.setId(payload.id());
@@ -208,9 +236,12 @@ public class SyncService {
         sale.setDianStatus(payload.dianStatus() == null ? "SYNCED" : payload.dianStatus());
         sale.setStatus("ACTIVE");
         sale.setSubtotal(subtotal.setScale(2, RoundingMode.HALF_UP));
+        sale.setDiscountTotal(discountTotal);
         sale.setTaxTotal(taxTotal.setScale(2, RoundingMode.HALF_UP));
-        sale.setGrandTotal(subtotal.add(taxTotal).setScale(2, RoundingMode.HALF_UP));
+        sale.setGrandTotal(computedGrand);
         sale.setPaymentMethod(payload.paymentMethod());
+        sale.setAuthorizedBy(payload.authorizedBy());
+        sale.setCashShiftId(payload.cashShiftId());
         sale.setSoldAt(payload.soldAt());
         sale.setSyncedAt(now);
         saleRepository.saveAndFlush(sale);

@@ -1,0 +1,138 @@
+<section class="space-y-6">
+  <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="flex flex-wrap items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-800">Turno de caja</h1>
+        <p class="text-sm text-slate-500">Apertura y cierre de turno (cierre ciego auditable)</p>
+      </div>
+      <button type="button" (click)="reload()" class="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Actualizar</button>
+    </div>
+
+    @if (feedback()) { <div class="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ feedback() }}</div> }
+    @if (error()) { <div class="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ error() }}</div> }
+  </div>
+
+  @if (!current()) {
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-slate-800">Abrir turno</h2>
+      <div class="mt-3 flex flex-wrap items-end gap-3">
+        <label class="block text-sm">
+          <span class="font-medium text-slate-700">Monto inicial en caja</span>
+          <input type="number" min="0" step="100" class="mt-1 w-48 rounded-lg border border-slate-300 px-3 py-2"
+                 [value]="openingAmount()" (input)="openingAmount.set(($any($event.target)).valueAsNumber || 0)" />
+        </label>
+        <button type="button" (click)="openShift()" [disabled]="busy() || !sync.online()"
+                class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+          {{ busy() ? 'Abriendo…' : 'Abrir turno' }}
+        </button>
+      </div>
+      @if (!sync.online()) {
+        <p class="mt-2 text-xs text-amber-700">Se requiere conexión para abrir/cerrar turno en el servidor.</p>
+      }
+    </div>
+  } @else {
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-slate-800">Turno abierto</h2>
+      <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div><dt class="text-slate-500">ID</dt><dd class="font-medium break-all">{{ current()!.id }}</dd></div>
+        <div><dt class="text-slate-500">Apertura</dt><dd>{{ current()!.openedAt | date:'short' }}</dd></div>
+        <div><dt class="text-slate-500">Monto inicial</dt><dd>{{ current()!.openingAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</dd></div>
+        <div><dt class="text-slate-500">Estado</dt><dd class="font-semibold text-emerald-700">{{ current()!.status }}</dd></div>
+      </dl>
+
+      <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <h3 class="font-semibold text-amber-900">Cierre de caja {{ blindClose() ? '(ciego)' : '' }}</h3>
+        @if (blindClose() && !countedEntered()) {
+          <p class="mt-1 text-sm text-amber-800">El efectivo esperado está oculto. Ingresa el conteo físico y confirma para continuar.</p>
+        }
+        <div class="mt-3 flex flex-wrap items-end gap-3">
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Efectivo contado (físico)</span>
+            <input type="number" min="0" step="100" class="mt-1 w-48 rounded-lg border border-slate-300 px-3 py-2"
+                   [value]="countedAmount()" (input)="onCountedInput($event)" [disabled]="countedEntered() && blindClose()" />
+          </label>
+          @if (blindClose() && !countedEntered()) {
+            <button type="button" (click)="confirmCounted()"
+                    class="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-700">
+              Confirmar conteo
+            </button>
+          }
+          <label class="block text-sm flex-1 min-w-[200px]">
+            <span class="font-medium text-slate-700">Notas (opcional)</span>
+            <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                   [value]="notes()" (input)="notes.set(($any($event.target)).value)" />
+          </label>
+        </div>
+
+        @if (!blindClose() || countedEntered()) {
+          <div class="mt-4 rounded-lg bg-white p-3 text-sm text-slate-700">
+            <p class="font-medium text-slate-800">Conteo confirmado. Al cerrar se calculará el esperado y la diferencia (sobrante/faltante).</p>
+            <p class="text-slate-500">El detalle esperado/diferencia se mostrará tras el cierre registrado en servidor.</p>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" (click)="requestClose()" [disabled]="busy() || !sync.online()"
+                    class="rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white hover:bg-rose-700 disabled:bg-slate-300">
+              {{ busy() ? 'Cerrando…' : 'Cerrar turno (autorizar con PIN)' }}
+            </button>
+            <button type="button" (click)="closeWithoutPin()" [disabled]="busy() || !sync.online()"
+                    class="rounded-lg border border-slate-300 px-4 py-2 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              Cerrar sin PIN
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (lastClosed()) {
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-emerald-900">Resultado del cierre</h2>
+      <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div><dt class="text-slate-600">Esperado (efectivo)</dt><dd class="font-bold">{{ lastClosed()!.expectedCashAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</dd></div>
+        <div><dt class="text-slate-600">Contado</dt><dd class="font-bold">{{ lastClosed()!.countedCashAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</dd></div>
+        <div><dt class="text-slate-600">Diferencia</dt>
+          <dd class="font-bold" [class.text-emerald-700]="(lastClosed()!.differenceAmount ?? 0) >= 0" [class.text-rose-700]="(lastClosed()!.differenceAmount ?? 0) < 0">
+            {{ lastClosed()!.differenceAmount | currency:'COP':'symbol-narrow':'1.0-0' }}
+          </dd>
+        </div>
+        <div><dt class="text-slate-600">Autorizado por</dt><dd class="break-all">{{ lastClosed()!.authorizedByUserId || '—' }}</dd></div>
+      </dl>
+    </div>
+  }
+
+  <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-semibold text-slate-800">Turnos recientes</h2>
+    <div class="mt-3 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="border-b border-slate-200 text-xs uppercase text-slate-500">
+          <tr><th class="py-2 pr-3">Apertura</th><th class="py-2 pr-3">Cierre</th><th class="py-2 pr-3">Estado</th><th class="py-2 pr-3 text-right">Inicial</th><th class="py-2 pr-3 text-right">Esperado</th><th class="py-2 pr-3 text-right">Contado</th><th class="py-2 text-right">Diferencia</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          @for (s of history(); track s.id) {
+            <tr>
+              <td class="py-2 pr-3">{{ s.openedAt | date:'short' }}</td>
+              <td class="py-2 pr-3">{{ s.closedAt ? (s.closedAt | date:'short') : '—' }}</td>
+              <td class="py-2 pr-3">{{ s.status }}</td>
+              <td class="py-2 pr-3 text-right">{{ s.openingAmount | currency:'COP':'symbol-narrow':'1.0-0' }}</td>
+              <td class="py-2 pr-3 text-right">{{ s.expectedCashAmount != null ? (s.expectedCashAmount | currency:'COP':'symbol-narrow':'1.0-0') : '—' }}</td>
+              <td class="py-2 pr-3 text-right">{{ s.countedCashAmount != null ? (s.countedCashAmount | currency:'COP':'symbol-narrow':'1.0-0') : '—' }}</td>
+              <td class="py-2 text-right">{{ s.differenceAmount != null ? (s.differenceAmount | currency:'COP':'symbol-narrow':'1.0-0') : '—' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="7" class="py-6 text-center text-slate-400">Sin turnos registrados</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<app-supervisor-pin-modal
+  [open]="pinOpen()"
+  title="Autorizar cierre de caja"
+  message="Ingresa el PIN de supervisor para auditar el cierre de turno."
+  [error]="pinError()"
+  [busy]="pinBusy()"
+  (pinSubmit)="onPinSubmit($event)"
+  (cancelled)="onPinCancel()">
+</app-supervisor-pin-modal>

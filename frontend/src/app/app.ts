@@ -13,6 +13,6 @@ export class App implements OnInit {
   readonly sync = inject(SyncService);
 
   ngOnInit(): void {
-    void this.sync.start();
+    void this.sync.init();
   }
 }

@@ -23,9 +23,12 @@ public record SalePayloadDto(
         @NotBlank String fullDocumentNumber,
         String dianStatus,
         @NotNull @DecimalMin("0") BigDecimal subtotal,
+        @DecimalMin("0") BigDecimal discountTotal,
         @NotNull @DecimalMin("0") BigDecimal taxTotal,
         @NotNull @DecimalMin("0") BigDecimal grandTotal,
         @NotBlank String paymentMethod,
+        UUID authorizedBy,
+        UUID cashShiftId,
         @NotNull Instant soldAt,
         @Valid @NotEmpty List<SaleItemPayloadDto> items
 ) {

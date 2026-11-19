@@ -4,7 +4,16 @@ import { firstValueFrom } from 'rxjs';
 import { v7 as uuidv7 } from 'uuid';
 import { db } from '../db/pos-offline.database';
 import { environment } from '../../../environments/environment';
-import { round2, type InventoryMovementRecord, type LowStockProduct, type MovementType } from '../models/pos.models';
+import { round2, type InventoryMovementRecord, type MovementType } from '../models/pos.models';
+
+export interface LowStockProduct {
+  id: string;
+  sku?: string;
+  name: string;
+  currentStock: number;
+  minStock: number;
+  allowNegativeStock?: boolean;
+}
 
 export interface KardexPage {
   content: InventoryMovementRecord[];
@@ -22,7 +31,7 @@ export class InventoryService {
     if (navigator.onLine) {
       try {
         const remote = await firstValueFrom(
-          this.http.get<LowStockProduct[]>(`${environment.apiBaseUrl}/inventory/low-stock`),
+          this.http.get<LowStockProduct[]>(`${environment.apiBaseUrl}/api/v1/inventory/low-stock`),
         );
         return remote;
       } catch {
@@ -46,7 +55,7 @@ export class InventoryService {
   async kardex(productId: string, page = 0, size = 20): Promise<KardexPage> {
     const remotePromise = navigator.onLine
       ? firstValueFrom(
-          this.http.get<KardexPage>(`${environment.apiBaseUrl}/inventory/kardex/${productId}`, {
+          this.http.get<KardexPage>(`${environment.apiBaseUrl}/api/v1/inventory/kardex/${productId}`, {
             params: { page, size },
           }),
         ).catch(() => null)
@@ -78,7 +87,7 @@ export class InventoryService {
     if (navigator.onLine) {
       try {
         const response = await firstValueFrom(
-          this.http.post<InventoryMovementRecord>(`${environment.apiBaseUrl}/inventory/movements`, input),
+          this.http.post<InventoryMovementRecord>(`${environment.apiBaseUrl}/api/v1/inventory/movements`, input),
         );
         await this.applyLocalMovement(response, false);
         return response;

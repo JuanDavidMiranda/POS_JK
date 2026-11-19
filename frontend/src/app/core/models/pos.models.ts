@@ -45,23 +45,52 @@ export interface TerminalConfig {
   creditNoteNextSequence: number;
 }
 
+export interface SecurityPolicy {
+  requirePinForDiscounts: boolean;
+  maxCashierDiscountPercent: number;
+  requirePinForVoidItem: boolean;
+  blindCashClose: boolean;
+  updatedAt?: string;
+}
+
+export interface SupervisorUser {
+  userId: string;
+  fullName: string;
+  pinHash: string;
+}
+
 export interface ConfigRecord {
   key: string;
   value: unknown;
   updatedAt: string;
 }
 
+export interface CashShiftRecord {
+  id: string;
+  terminalId?: string | null;
+  status: 'OPEN' | 'CLOSED';
+  openingAmount: number;
+  expectedCashAmount?: number | null;
+  countedCashAmount?: number | null;
+  differenceAmount?: number | null;
+  openedAt: string;
+  closedAt?: string | null;
+  authorizedByUserId?: string | null;
+  notes?: string | null;
+  synced: boolean;
+}
+
 export interface CartLine {
+  id?: string;
   productId: string;
   name: string;
   sku: string;
   quantity: number;
   unitPrice: number;
   taxRate: number;
-  taxType: TaxType;
-  lineSubtotal: number;
-  lineTax: number;
-  lineTotal: number;
+  discountPercent: number;
+  discountAmount: number;
+  currentStock: number;
 }
 
 export interface SaleItemPayload {
@@ -77,78 +106,41 @@ export interface SaleItemPayload {
 export interface SalePayload {
   id: string;
   terminalId: string;
-  customerId: string | null;
-  documentType: string;
+  customerId?: string;
+  documentType: 'POS';
   dianPrefix: string;
   sequenceNumber: number;
   fullDocumentNumber: string;
-  dianStatus: string;
+  dianStatus: 'PENDING';
   subtotal: number;
+  discountTotal: number;
   taxTotal: number;
   grandTotal: number;
   paymentMethod: PaymentMethod;
+  authorizedBy?: string | null;
+  cashShiftId?: string | null;
   soldAt: string;
   items: SaleItemPayload[];
 }
 
-export interface SaleHistoryRecord extends SalePayload {
-  status: SaleStatus;
-  syncedAt?: string;
-  lastError?: string;
-  creditNotes?: CreditNoteRecord[];
-}
-
-export interface InventoryMovementRecord {
+export interface SaleHistoryRecord {
   id: string;
-  productId: string;
-  sku?: string;
-  productName?: string;
-  movementType: MovementType;
-  quantity: number;
-  previousStock: number;
-  newStock: number;
-  referenceId?: string | null;
-  notes?: string | null;
-  createdBy?: string | null;
-  createdAt: string;
-  pendingSync?: boolean;
-}
-
-export interface LowStockProduct {
-  id: string;
-  sku: string;
-  name: string;
-  currentStock: number;
-  minStock: number;
-  allowNegativeStock: boolean;
-}
-
-export interface CreditNoteItem {
-  id?: string;
-  productId: string;
-  quantity: number;
-  unitPrice?: number;
-  taxAmount?: number;
-  lineTotal?: number;
-}
-
-export interface CreditNoteRecord {
-  id: string;
-  saleId: string;
-  terminalId: string;
-  dianPrefix: string;
-  sequenceNumber: number;
   fullDocumentNumber: string;
-  reasonCode: CreditNoteReason;
-  reasonDescription: string;
-  dianStatus: 'PENDING_TRANSMISSION' | 'ACCEPTED' | 'REJECTED';
-  cude?: string | null;
+  sequenceNumber: number;
+  status: SaleStatus;
+  paymentMethod: PaymentMethod;
   subtotal: number;
+  discountTotal: number;
   taxTotal: number;
   grandTotal: number;
-  createdAt: string;
-  saleStatus?: string;
-  items: CreditNoteItem[];
+  soldAt: string;
+  authorizedBy?: string | null;
+  cashShiftId?: string | null;
+  terminalId?: string;
+  items: any[];
+  rejectionReason?: string;
+  lastError?: string;
+  creditNotes?: CreditNoteRecord[];
 }
 
 export interface OutboxEvent {
@@ -156,8 +148,16 @@ export interface OutboxEvent {
   entityType: 'SALE';
   payload: SalePayload;
   createdAt: string;
-  attempts: number;
+  attemptCount: number;
   lastError?: string;
+}
+
+export interface SyncEventResult {
+  idempotencyKey: string;
+  status: 'PROCESSED' | 'DUPLICATE' | 'REJECTED_CONFLICT';
+  saleId?: string;
+  fullDocumentNumber?: string;
+  reason?: string;
 }
 
 export interface PullResponse {
@@ -167,14 +167,8 @@ export interface PullResponse {
   terminal: TerminalConfig;
   products: Product[];
   customers: Customer[];
-}
-
-export interface SyncEventResult {
-  idempotencyKey: string;
-  status: 'PROCESSED' | 'DUPLICATE_IGNORED' | 'REJECTED_CONFLICT';
-  saleId: string | null;
-  fullDocumentNumber: string | null;
-  message: string;
+  securityPolicy?: SecurityPolicy;
+  supervisorPins?: SupervisorUser[];
 }
 
 export interface PushResponse {
@@ -183,14 +177,90 @@ export interface PushResponse {
   results: SyncEventResult[];
 }
 
-export function money(value: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(value);
+export interface InventoryMovementRecord {
+  id: string;
+  productId: string;
+  movementType: MovementType;
+  type?: MovementType;
+  quantity: number;
+  previousStock?: number;
+  newStock?: number;
+  resultingStock?: number;
+  sku?: string;
+  productName?: string;
+  notes?: string | null;
+  reason?: string | null;
+  referenceId?: string | null;
+  createdAt: string;
+  createdBy?: string | null;
+  pendingSync?: boolean;
 }
 
-export function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+export interface CreditNoteItemPayload {
+  saleItemId?: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  taxAmount: number;
+  lineTotal: number;
+}
+
+export interface CreditNoteRecord {
+  id: string;
+  saleId: string;
+  fullDocumentNumber: string;
+  reasonCode: CreditNoteReason;
+  reasonDescription: string;
+  dianStatus: string;
+  subtotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  createdAt: string;
+  items: CreditNoteItemPayload[];
+  cude?: string;
+  saleStatus?: string;
+}
+
+export interface SaleSummaryResponse {
+  grossSales: number;
+  creditNotesTotal: number;
+  netSales: number;
+  taxTotal: number;
+  transactions: number;
+  averageTicket: number;
+  paymentBreakdown: { paymentMethod: string; grossTotal: number; transactions: number }[];
+  dailyBreakdown: { date: string; grossSales: number; creditNotes: number; netSales: number; taxTotal: number; transactions: number }[];
+}
+
+export interface TopProductsResponse {
+  totalRevenue: number;
+  totalUnits: number;
+  items: { productId: string; sku: string; name: string; unitsSold: number; revenue: number; participationPercent: number }[];
+}
+
+export interface TaxSummaryResponse {
+  taxableBaseTotal: number;
+  taxAmountTotal: number;
+  grandTotal: number;
+  rows: { label: string; taxType: string; taxRate: number; taxableBase: number; taxAmount: number; total: number }[];
+}
+
+export const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+
+const moneyFormatter = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+export const money = (value: number): string => moneyFormatter.format(value ?? 0);
+
+export interface LowStockProduct {
+  id: string;
+  sku?: string;
+  name: string;
+  currentStock: number;
+  minStock: number;
+  allowNegativeStock?: boolean;
 }

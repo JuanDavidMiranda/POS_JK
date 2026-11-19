@@ -8,6 +8,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/pos/pos').then((module) => module.Pos),
   },
   {
+    path: 'caja',
+    title: 'Caja',
+    loadComponent: () => import('./features/cash-shift/cash-shift').then((module) => module.CashShift),
+  },
+  {
     path: 'historial',
     title: 'Historial de ventas',
     loadComponent: () => import('./features/history/history').then((module) => module.History),
@@ -21,6 +26,16 @@ export const routes: Routes = [
     path: 'cargue-masivo',
     title: 'Cargue Masivo',
     loadComponent: () => import('./features/bulk-import/bulk-import').then((module) => module.BulkImport),
+  },
+  {
+    path: 'seguridad',
+    title: 'Seguridad',
+    loadComponent: () => import('./features/security/security').then((module) => module.Security),
+  },
+  {
+    path: 'reportes',
+    title: 'Reportes',
+    loadComponent: () => import('./features/reports/reports').then((module) => module.Reports),
   },
   { path: '**', redirectTo: 'pos' },
 ];

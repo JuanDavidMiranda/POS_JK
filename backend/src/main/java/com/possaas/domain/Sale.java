@@ -54,6 +54,9 @@ public class Sale {
     @Column(name = "subtotal", nullable = false, precision = 14, scale = 2)
     private BigDecimal subtotal;
 
+    @Column(name = "discount_total", nullable = false, precision = 12, scale = 2)
+    private BigDecimal discountTotal = BigDecimal.ZERO;
+
     @Column(name = "tax_total", nullable = false, precision = 14, scale = 2)
     private BigDecimal taxTotal;
 
@@ -62,6 +65,12 @@ public class Sale {
 
     @Column(name = "payment_method", nullable = false, length = 20)
     private String paymentMethod;
+
+    @Column(name = "authorized_by")
+    private UUID authorizedBy;
+
+    @Column(name = "cash_shift_id")
+    private UUID cashShiftId;
 
     @Column(name = "sold_at", nullable = false)
     private Instant soldAt;

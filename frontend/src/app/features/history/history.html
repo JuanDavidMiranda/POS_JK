@@ -119,9 +119,9 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            @for (item of modalSale()!.items; track item.id) {
+            @for (item of modalSale()!.items; track item.productId) {
               <tr>
-                <td class="px-3 py-2 text-slate-700">{{ item.productId }}</td>
+                <td class="px-3 py-2 text-slate-700">{{ item.name || item.productId }}</td>
                 <td class="px-3 py-2 text-right">{{ item.quantity }}</td>
                 <td class="px-3 py-2 text-right text-slate-500">{{ returnedQty(modalSale()!, item.productId) }}</td>
                 <td class="px-3 py-2 text-right">

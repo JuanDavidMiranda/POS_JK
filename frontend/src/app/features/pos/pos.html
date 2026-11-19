@@ -1,4 +1,4 @@
-<div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+<div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
   <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div>
@@ -16,6 +16,11 @@
     @if (feedback()) {
       <div class="mb-4 rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">{{ feedback() }}</div>
     }
+    @if (authorizedName()) {
+      <div class="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        Autorización activa: {{ authorizedName() }}
+      </div>
+    }
 
     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       @for (product of filtered(); track product.id) {
@@ -24,10 +29,10 @@
             <div class="flex items-start justify-between gap-2">
               <h2 class="text-sm font-semibold text-slate-800">{{ product.name }}</h2>
               <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                {{ product.taxType }} {{ (product.taxRate * 100).toFixed(0) }}%
+                {{ product.taxType }} {{ (product.taxRate * 100) | number:'1.0-0' }}%
               </span>
             </div>
-            <p class="mt-1 text-xs text-slate-500">{{ product.sku }} · {{ product.barcode }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ product.sku }} · {{ product.barcode || '—' }}</p>
             <p class="mt-2 text-lg font-bold text-emerald-700">{{ money(product.salePrice) }}</p>
             <p class="text-xs" [class.text-rose-600]="product.currentStock <= 0" [class.text-slate-500]="product.currentStock > 0">
               Stock: {{ product.currentStock }}
@@ -51,27 +56,54 @@
 
     <div class="mt-3 space-y-2">
       @for (line of cart(); track line.productId) {
-        <div class="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-slate-800">{{ line.name }}</p>
-            <p class="text-xs text-slate-500">{{ money(line.unitPrice) }} c/u · {{ line.taxType }}</p>
+        <div class="rounded-lg bg-slate-50 p-2">
+          <div class="flex items-start gap-2">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-slate-800">{{ line.name }}</p>
+              <p class="text-xs text-slate-500">{{ money(line.unitPrice) }} c/u</p>
+            </div>
+            <button type="button" (click)="requestRemove(line.productId)"
+                    class="rounded border border-rose-200 px-2 py-0.5 text-xs font-medium text-rose-600 hover:bg-rose-50"
+                    title="Quitar ítem">Quitar</button>
           </div>
-          <div class="flex items-center gap-1">
-            <button type="button" (click)="changeQuantity(line.productId, -1)"
-                    class="h-7 w-7 rounded bg-slate-200 font-bold">−</button>
-            <span class="w-6 text-center text-sm font-semibold">{{ line.quantity }}</span>
-            <button type="button" (click)="changeQuantity(line.productId, 1)"
-                    class="h-7 w-7 rounded bg-slate-200 font-bold">+</button>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-1">
+              <button type="button" (click)="changeQuantity(line.productId, -1)"
+                      class="h-7 w-7 rounded bg-slate-200 font-bold">−</button>
+              <span class="w-6 text-center text-sm font-semibold">{{ line.quantity }}</span>
+              <button type="button" (click)="changeQuantity(line.productId, 1)"
+                      class="h-7 w-7 rounded bg-slate-200 font-bold">+</button>
+            </div>
+            <label class="flex items-center gap-1 text-xs text-slate-600">
+              Desc %
+              <input type="number" min="0" max="100" step="0.5"
+                     class="w-16 rounded border border-slate-300 px-1.5 py-1 text-right text-xs"
+                     [value]="line.discountPercent"
+                     (change)="onLineDiscountInput(line.productId, $event)" />
+            </label>
+            <span class="ml-auto text-sm font-semibold">{{ money(line.quantity * line.unitPrice) }}</span>
           </div>
-          <span class="w-20 text-right text-sm font-semibold">{{ money(line.lineTotal) }}</span>
         </div>
       } @empty {
         <p class="py-6 text-center text-sm text-slate-400">Agrega productos al carrito</p>
       }
     </div>
 
+    @if (cart().length > 0) {
+      <div class="mt-3 rounded-lg border border-slate-200 p-2">
+        <label class="flex items-center justify-between gap-2 text-sm text-slate-700">
+          <span>Descuento total (%)</span>
+          <input type="number" min="0" max="100" step="0.5" value="0"
+                 class="w-20 rounded border border-slate-300 px-2 py-1 text-right text-sm"
+                 (change)="applyCartDiscount($event)" />
+        </label>
+        <p class="mt-1 text-xs text-slate-500">Máx. cajero sin PIN: {{ policy().maxCashierDiscountPercent }}%</p>
+      </div>
+    }
+
     <dl class="mt-4 space-y-1 border-t border-slate-200 pt-3 text-sm">
       <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd>{{ money(subtotal()) }}</dd></div>
+      <div class="flex justify-between text-emerald-700"><dt>Descuento</dt><dd>-{{ money(discountTotal()) }}</dd></div>
       <div class="flex justify-between"><dt class="text-slate-500">IVA</dt><dd>{{ money(taxTotal()) }}</dd></div>
       <div class="flex justify-between text-base font-bold text-slate-900">
         <dt>Total</dt><dd>{{ money(grandTotal()) }}</dd>
@@ -90,6 +122,16 @@
             class="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-bold text-white hover:bg-emerald-700 disabled:bg-slate-300">
       {{ busy() ? 'Procesando…' : 'Cobrar' }}
     </button>
-    <p class="mt-2 text-center text-xs text-slate-500">Funciona con o sin internet</p>
+    <p class="mt-2 text-center text-xs text-slate-500">Funciona con o sin internet · descuentos/auditoría offline</p>
   </aside>
 </div>
+
+<app-supervisor-pin-modal
+  [open]="pinOpen()"
+  [title]="pinTitle()"
+  [message]="pinMessage()"
+  [error]="pinError()"
+  [busy]="pinBusy()"
+  (pinSubmit)="onPinSubmit($event)"
+  (cancelled)="onPinCancel()">
+</app-supervisor-pin-modal>

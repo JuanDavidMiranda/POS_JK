@@ -145,10 +145,15 @@ export class History implements OnInit {
     this.feedback.set('');
     try {
       const terminal = await this.sync.terminal();
+      const terminalId = terminal?.id ?? sale.terminalId;
+      if (!terminalId) {
+        this.feedback.set('No se pudo determinar la terminal de la venta.');
+        return;
+      }
       const note = await this.creditNoteService.create({
         id: uuidv7(),
         saleId: sale.id,
-        terminalId: terminal?.id ?? sale.terminalId,
+        terminalId,
         reasonCode: this.reasonCode(),
         reasonDescription: this.reasonDescription().trim(),
         items,

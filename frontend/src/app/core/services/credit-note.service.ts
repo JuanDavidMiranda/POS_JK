@@ -24,7 +24,7 @@ export class CreditNoteService {
     }
 
     const response = await firstValueFrom(
-      this.http.post<CreditNoteRecord>(`${environment.apiBaseUrl}/credit-notes`, input),
+      this.http.post<CreditNoteRecord>(`${environment.apiBaseUrl}/api/v1/credit-notes`, input),
     );
 
     await db.transaction('rw', db.salesHistory, db.products, db.creditNotes, db.inventoryMovements, async () => {

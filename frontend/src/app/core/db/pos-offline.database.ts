@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import {
+  type CashShiftRecord,
   type ConfigRecord,
   type CreditNoteRecord,
   type Customer,
@@ -17,6 +18,7 @@ class PosOfflineDatabase extends Dexie {
   salesHistory!: EntityTable<SaleHistoryRecord, 'id'>;
   inventoryMovements!: EntityTable<InventoryMovementRecord, 'id'>;
   creditNotes!: EntityTable<CreditNoteRecord, 'id'>;
+  cashShifts!: EntityTable<CashShiftRecord, 'id'>;
 
   constructor() {
     super('PosOfflineDatabase');
@@ -33,45 +35,46 @@ class PosOfflineDatabase extends Dexie {
       config: 'key',
       outbox: 'idempotencyKey, createdAt, entityType',
       salesHistory: 'id, fullDocumentNumber, sequenceNumber, status, soldAt',
-      inventoryMovements: 'id, productId, createdAt, movementType, [productId+createdAt]',
-      creditNotes: 'id, saleId, createdAt, fullDocumentNumber',
-    }).upgrade(async (tx) => {
-      await tx.table('products').toCollection().modify((product: any) => {
-        if (product.minStock == null) {
-          product.minStock = 0;
-        }
-      });
-      await tx.table('salesHistory').toCollection().modify((sale: any) => {
-        if (!sale.status) {
-          sale.status = 'SYNCED';
-        }
-      });
+      inventoryMovements: 'id, productId, createdAt',
+      creditNotes: 'id, saleId, createdAt',
+    });
+    this.version(3).stores({
+      products: 'id, sku, barcode, name, updatedAt, minStock',
+      customers: 'id, documentNumber, updatedAt',
+      config: 'key',
+      outbox: 'idempotencyKey, createdAt, entityType',
+      salesHistory: 'id, fullDocumentNumber, sequenceNumber, status, soldAt, cashShiftId',
+      inventoryMovements: 'id, productId, createdAt',
+      creditNotes: 'id, saleId, createdAt',
+      cashShifts: 'id, status, openedAt, closedAt',
     });
   }
 }
 
 export const db = new PosOfflineDatabase();
 
-/** Pide al navegador que no expulse IndexedDB bajo presión de almacenamiento. */
-export async function requestPersistentStorage(): Promise<boolean> {
-  if (!navigator.storage?.persist) {
-    return false;
-  }
-  try {
-    if (await navigator.storage.persisted()) {
-      return true;
-    }
-    return await navigator.storage.persist();
-  } catch {
-    return false;
-  }
-}
+export const terminalConfigKey = 'terminal_config';
+export const lastPullKey = 'last_pull_cursor';
+export const demoTenantKey = 'tenant_id';
+export const securityPolicyKey = 'security_policy';
+export const supervisorPinsKey = 'supervisor_pins';
 
 export async function readConfig<T>(key: string): Promise<T | undefined> {
   const record = await db.config.get(key);
   return record?.value as T | undefined;
 }
 
+export async function writeConfig(key: string, value: unknown): Promise<void> {
+  await db.config.put({ key, value, updatedAt: new Date().toISOString() });
+}
+
 export function sequenceKey(prefix: string): string {
   return `sequence:${prefix}`;
+}
+
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (!navigator.storage?.persist) {
+    return false;
+  }
+  return navigator.storage.persist();
 }

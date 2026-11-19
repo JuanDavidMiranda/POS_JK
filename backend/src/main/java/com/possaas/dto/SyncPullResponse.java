@@ -10,6 +10,8 @@ public record SyncPullResponse(
         UUID tenantId,
         TerminalConfigDto terminal,
         List<ProductDto> products,
-        List<CustomerDto> customers
+        List<CustomerDto> customers,
+        SecurityPolicyDto securityPolicy,
+        List<SupervisorPinDto> supervisorPins
 ) {
 }

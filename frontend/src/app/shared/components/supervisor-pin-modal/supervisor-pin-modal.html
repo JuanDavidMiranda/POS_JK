@@ -1,0 +1,37 @@
+@if (open) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+      <h2 class="text-lg font-bold text-slate-800">{{ title }}</h2>
+      <p class="mt-1 text-sm text-slate-500">{{ message }}</p>
+
+      <div class="mt-4 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-center text-2xl tracking-[0.4em] text-slate-800 min-h-[3.25rem]">
+        {{ masked() || '----' }}
+      </div>
+
+      @if (error) {
+        <p class="mt-2 text-center text-sm font-medium text-rose-600">{{ error }}</p>
+      }
+
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        @for (k of ['1','2','3','4','5','6','7','8','9','clear','0','back']; track k) {
+          <button type="button" (click)="press(k)"
+                  class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-lg font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50"
+                  [disabled]="busy">
+            @if (k === 'back') { ← } @else if (k === 'clear') { C } @else { {{ k }} }
+          </button>
+        }
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <button type="button" (click)="close()" [disabled]="busy"
+                class="flex-1 rounded-lg border border-slate-300 px-3 py-2 font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+          Cancelar
+        </button>
+        <button type="button" (click)="submit()" [disabled]="busy || pin().length < 4"
+                class="flex-1 rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+          {{ busy ? 'Validando…' : 'Autorizar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

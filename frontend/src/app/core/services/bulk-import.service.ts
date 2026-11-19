@@ -48,7 +48,7 @@ export interface ImportJobResponse {
 @Injectable({ providedIn: 'root' })
 export class BulkImportService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiBaseUrl}/imports`;
+  private readonly baseUrl = `${environment.apiBaseUrl}/api/v1/imports`;
 
   async downloadTemplate(entityType: ImportEntityType): Promise<void> {
     const blob = await firstValueFrom(
