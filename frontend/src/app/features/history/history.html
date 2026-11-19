@@ -1,0 +1,56 @@
+<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-slate-800">Historial de ventas locales</h1>
+      <p class="text-sm text-slate-500">{{ sales().length }} venta(s) en este dispositivo</p>
+    </div>
+    <button type="button" (click)="refresh()"
+            class="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50">
+      Actualizar y sincronizar
+    </button>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="border-b border-slate-200 text-xs uppercase text-slate-500">
+        <tr>
+          <th class="py-2">Consecutivo</th>
+          <th class="py-2">Fecha</th>
+          <th class="py-2">Ítems</th>
+          <th class="py-2">Pago</th>
+          <th class="py-2 text-right">Total</th>
+          <th class="py-2 text-right">Estado</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        @for (sale of sales(); track sale.id) {
+          <tr>
+            <td class="py-3 font-semibold text-slate-800">{{ sale.fullDocumentNumber }}</td>
+            <td class="py-3 text-slate-600">{{ formatDate(sale.soldAt) }}</td>
+            <td class="py-3 text-slate-600">{{ sale.items.length }}</td>
+            <td class="py-3 text-slate-600">{{ sale.paymentMethod }}</td>
+            <td class="py-3 text-right font-semibold">{{ money(sale.grandTotal) }}</td>
+            <td class="py-3 text-right">
+              @switch (sale.status) {
+                @case ('SYNCED') {
+                  <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">SYNCED</span>
+                }
+                @case ('REJECTED_CONFLICT') {
+                  <span class="rounded-full bg-rose-100 px-2 py-1 text-xs font-bold text-rose-700"
+                        [title]="sale.lastError ?? ''">REJECTED_CONFLICT</span>
+                }
+                @default {
+                  <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">OFFLINE_PENDING</span>
+                }
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="py-10 text-center text-slate-400">Aún no hay ventas en este dispositivo</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

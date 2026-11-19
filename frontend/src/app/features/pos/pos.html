@@ -1,0 +1,95 @@
+<div class="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+  <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-800">Punto de venta</h1>
+        <p class="text-sm text-slate-500">
+          Caja {{ terminal()?.name ?? 'sin configurar' }} · Prefijo {{ terminal()?.dianPrefix ?? '—' }} ·
+          Consecutivo local {{ terminal()?.dianPrefix ?? 'POS1' }}-{{ terminal()?.nextSequence ?? 1 }}
+        </p>
+      </div>
+      <input type="search" [value]="query()" (input)="onSearch($event)"
+             placeholder="Buscar por nombre, SKU o código de barras…"
+             class="ml-auto w-full max-w-sm rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+    </div>
+
+    @if (feedback()) {
+      <div class="mb-4 rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">{{ feedback() }}</div>
+    }
+
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      @for (product of filtered(); track product.id) {
+        <article class="flex flex-col justify-between rounded-lg border border-slate-200 p-3 hover:border-emerald-400">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <h2 class="text-sm font-semibold text-slate-800">{{ product.name }}</h2>
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
+                {{ product.taxType }} {{ (product.taxRate * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">{{ product.sku }} · {{ product.barcode }}</p>
+            <p class="mt-2 text-lg font-bold text-emerald-700">{{ money(product.salePrice) }}</p>
+            <p class="text-xs" [class.text-rose-600]="product.currentStock <= 0" [class.text-slate-500]="product.currentStock > 0">
+              Stock: {{ product.currentStock }}
+            </p>
+          </div>
+          <button type="button" (click)="add(product)"
+                  class="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+            Agregar
+          </button>
+        </article>
+      } @empty {
+        <p class="col-span-full py-8 text-center text-sm text-slate-500">
+          No hay productos locales. Conéctate una vez para descargar el catálogo.
+        </p>
+      }
+    </div>
+  </section>
+
+  <aside class="h-fit rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-32">
+    <h2 class="text-lg font-bold text-slate-800">Carrito</h2>
+
+    <div class="mt-3 space-y-2">
+      @for (line of cart(); track line.productId) {
+        <div class="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium text-slate-800">{{ line.name }}</p>
+            <p class="text-xs text-slate-500">{{ money(line.unitPrice) }} c/u · {{ line.taxType }}</p>
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" (click)="changeQuantity(line.productId, -1)"
+                    class="h-7 w-7 rounded bg-slate-200 font-bold">−</button>
+            <span class="w-6 text-center text-sm font-semibold">{{ line.quantity }}</span>
+            <button type="button" (click)="changeQuantity(line.productId, 1)"
+                    class="h-7 w-7 rounded bg-slate-200 font-bold">+</button>
+          </div>
+          <span class="w-20 text-right text-sm font-semibold">{{ money(line.lineTotal) }}</span>
+        </div>
+      } @empty {
+        <p class="py-6 text-center text-sm text-slate-400">Agrega productos al carrito</p>
+      }
+    </div>
+
+    <dl class="mt-4 space-y-1 border-t border-slate-200 pt-3 text-sm">
+      <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd>{{ money(subtotal()) }}</dd></div>
+      <div class="flex justify-between"><dt class="text-slate-500">IVA</dt><dd>{{ money(taxTotal()) }}</dd></div>
+      <div class="flex justify-between text-base font-bold text-slate-900">
+        <dt>Total</dt><dd>{{ money(grandTotal()) }}</dd>
+      </div>
+    </dl>
+
+    <label class="mt-4 block text-sm font-medium text-slate-700" for="payment">Medio de pago</label>
+    <select id="payment" [value]="payment()" (change)="onPayment($event)"
+            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <option value="EFECTIVO">Efectivo</option>
+      <option value="TRANSFERENCIA">Transferencia</option>
+      <option value="TARJETA">Tarjeta</option>
+    </select>
+
+    <button type="button" (click)="cobrar()" [disabled]="cart().length === 0 || busy()"
+            class="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-3 text-base font-bold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+      {{ busy() ? 'Procesando…' : 'Cobrar' }}
+    </button>
+    <p class="mt-2 text-center text-xs text-slate-500">Funciona con o sin internet</p>
+  </aside>
+</div>

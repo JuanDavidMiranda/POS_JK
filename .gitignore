@@ -1,0 +1,22 @@
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/tmp/
+frontend/out-tsc/
+frontend/coverage/
+
+# Java / Maven
+backend/target/
+
+# Logs and environment
+*.log
+.env
+.env.*
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
