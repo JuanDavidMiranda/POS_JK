@@ -17,6 +17,20 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     boolean existsByIdAndTenantId(UUID id, UUID tenantId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.tenantId = :tenantId and p.id = :id")
+    java.util.Optional<Product> findByTenantIdAndIdForUpdate(@Param("tenantId") UUID tenantId,
+                                                             @Param("id") UUID id);
+
+    @Query("""
+            select p from Product p
+             where p.tenantId = :tenantId
+               and p.active = true
+               and p.currentStock <= p.minStock
+             order by p.currentStock asc
+            """)
+    List<Product> findLowStock(@Param("tenantId") UUID tenantId);
+
     @Modifying
     @Query("""
             update Product p

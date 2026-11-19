@@ -1,6 +1,14 @@
 export type TaxType = 'IVA' | 'EXENTO';
 export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
-export type SaleStatus = 'OFFLINE_PENDING' | 'SYNCED' | 'REJECTED_CONFLICT';
+export type SaleStatus = 'OFFLINE_PENDING' | 'SYNCED' | 'REJECTED_CONFLICT' | 'VOIDED' | 'PARTIALLY_RETURNED';
+export type MovementType =
+  | 'INITIAL_BALANCE'
+  | 'PURCHASE_IN'
+  | 'SALE_OUT'
+  | 'CREDIT_NOTE_IN'
+  | 'ADJUSTMENT_IN'
+  | 'ADJUSTMENT_OUT';
+export type CreditNoteReason = '1' | '2' | '3';
 
 export interface Product {
   id: string;
@@ -11,6 +19,7 @@ export interface Product {
   taxType: TaxType;
   taxRate: number;
   currentStock: number;
+  minStock: number;
   updatedAt: string;
 }
 
@@ -31,6 +40,9 @@ export interface TerminalConfig {
   rangeTo: number;
   lastSyncedSequence: number;
   nextSequence: number;
+  creditNotePrefix: string;
+  creditNoteLastSequence: number;
+  creditNoteNextSequence: number;
 }
 
 export interface ConfigRecord {
@@ -83,6 +95,60 @@ export interface SaleHistoryRecord extends SalePayload {
   status: SaleStatus;
   syncedAt?: string;
   lastError?: string;
+  creditNotes?: CreditNoteRecord[];
+}
+
+export interface InventoryMovementRecord {
+  id: string;
+  productId: string;
+  sku?: string;
+  productName?: string;
+  movementType: MovementType;
+  quantity: number;
+  previousStock: number;
+  newStock: number;
+  referenceId?: string | null;
+  notes?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+  pendingSync?: boolean;
+}
+
+export interface LowStockProduct {
+  id: string;
+  sku: string;
+  name: string;
+  currentStock: number;
+  minStock: number;
+  allowNegativeStock: boolean;
+}
+
+export interface CreditNoteItem {
+  id?: string;
+  productId: string;
+  quantity: number;
+  unitPrice?: number;
+  taxAmount?: number;
+  lineTotal?: number;
+}
+
+export interface CreditNoteRecord {
+  id: string;
+  saleId: string;
+  terminalId: string;
+  dianPrefix: string;
+  sequenceNumber: number;
+  fullDocumentNumber: string;
+  reasonCode: CreditNoteReason;
+  reasonDescription: string;
+  dianStatus: 'PENDING_TRANSMISSION' | 'ACCEPTED' | 'REJECTED';
+  cude?: string | null;
+  subtotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  createdAt: string;
+  saleStatus?: string;
+  items: CreditNoteItem[];
 }
 
 export interface OutboxEvent {

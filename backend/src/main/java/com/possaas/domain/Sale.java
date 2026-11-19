@@ -48,6 +48,9 @@ public class Sale {
     @Column(name = "dian_status", nullable = false, length = 20)
     private String dianStatus;
 
+    @Column(name = "status", nullable = false, length = 25)
+    private String status;
+
     @Column(name = "subtotal", nullable = false, precision = 14, scale = 2)
     private BigDecimal subtotal;
 

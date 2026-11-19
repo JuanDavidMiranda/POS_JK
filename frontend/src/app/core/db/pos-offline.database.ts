@@ -1,7 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie';
 import {
   type ConfigRecord,
+  type CreditNoteRecord,
   type Customer,
+  type InventoryMovementRecord,
   type OutboxEvent,
   type Product,
   type SaleHistoryRecord,
@@ -13,6 +15,8 @@ class PosOfflineDatabase extends Dexie {
   config!: EntityTable<ConfigRecord, 'key'>;
   outbox!: EntityTable<OutboxEvent, 'idempotencyKey'>;
   salesHistory!: EntityTable<SaleHistoryRecord, 'id'>;
+  inventoryMovements!: EntityTable<InventoryMovementRecord, 'id'>;
+  creditNotes!: EntityTable<CreditNoteRecord, 'id'>;
 
   constructor() {
     super('PosOfflineDatabase');
@@ -22,6 +26,26 @@ class PosOfflineDatabase extends Dexie {
       config: 'key',
       outbox: 'idempotencyKey, createdAt, entityType',
       salesHistory: 'id, fullDocumentNumber, sequenceNumber, status, soldAt',
+    });
+    this.version(2).stores({
+      products: 'id, sku, barcode, name, updatedAt, minStock',
+      customers: 'id, documentNumber, updatedAt',
+      config: 'key',
+      outbox: 'idempotencyKey, createdAt, entityType',
+      salesHistory: 'id, fullDocumentNumber, sequenceNumber, status, soldAt',
+      inventoryMovements: 'id, productId, createdAt, movementType, [productId+createdAt]',
+      creditNotes: 'id, saleId, createdAt, fullDocumentNumber',
+    }).upgrade(async (tx) => {
+      await tx.table('products').toCollection().modify((product: any) => {
+        if (product.minStock == null) {
+          product.minStock = 0;
+        }
+      });
+      await tx.table('salesHistory').toCollection().modify((sale: any) => {
+        if (!sale.status) {
+          sale.status = 'SYNCED';
+        }
+      });
     });
   }
 }

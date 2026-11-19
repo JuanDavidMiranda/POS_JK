@@ -41,6 +41,12 @@ public class PosTerminal {
     @Column(name = "last_synced_sequence", nullable = false)
     private Long lastSyncedSequence;
 
+    @Column(name = "credit_note_prefix", nullable = false, length = 10)
+    private String creditNotePrefix;
+
+    @Column(name = "credit_note_last_sequence", nullable = false)
+    private Long creditNoteLastSequence;
+
     @Column(name = "is_active", nullable = false)
     private Boolean active;
 

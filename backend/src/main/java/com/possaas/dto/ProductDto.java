@@ -13,6 +13,7 @@ public record ProductDto(
         String taxType,
         BigDecimal taxRate,
         BigDecimal currentStock,
+        BigDecimal minStock,
         Instant updatedAt
 ) {
 }

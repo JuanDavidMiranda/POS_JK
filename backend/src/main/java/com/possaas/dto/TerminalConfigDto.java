@@ -9,6 +9,9 @@ public record TerminalConfigDto(
         long rangeFrom,
         long rangeTo,
         long lastSyncedSequence,
-        long nextSequence
+        long nextSequence,
+        String creditNotePrefix,
+        long creditNoteLastSequence,
+        long creditNoteNextSequence
 ) {
 }

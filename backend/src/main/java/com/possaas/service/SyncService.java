@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.possaas.config.TenantContext;
 import com.possaas.config.TenantFilterSupport;
 import com.possaas.domain.Customer;
+import com.possaas.domain.MovementType;
 import com.possaas.domain.PosTerminal;
 import com.possaas.domain.Product;
 import com.possaas.domain.Sale;
@@ -58,6 +59,7 @@ public class SyncService {
     private final SaleItemRepository saleItemRepository;
     private final SyncInboxLogRepository inboxLogRepository;
     private final TenantFilterSupport tenantFilterSupport;
+    private final InventoryService inventoryService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -88,6 +90,8 @@ public class SyncService {
                 .toList();
 
         long nextSequence = Math.min(terminal.getLastSyncedSequence() + 1, terminal.getRangeTo());
+        String ncPrefix = terminal.getCreditNotePrefix() == null ? "NC1" : terminal.getCreditNotePrefix();
+        long ncLast = terminal.getCreditNoteLastSequence() == null ? 0L : terminal.getCreditNoteLastSequence();
         TerminalConfigDto config = new TerminalConfigDto(
                 terminal.getId(),
                 terminal.getName(),
@@ -95,7 +99,10 @@ public class SyncService {
                 terminal.getRangeFrom(),
                 terminal.getRangeTo(),
                 terminal.getLastSyncedSequence(),
-                nextSequence
+                nextSequence,
+                ncPrefix,
+                ncLast,
+                ncLast + 1
         );
 
         return new SyncPullResponse(Instant.now(), UuidV7.generate(), tenantId, config, products, customers);
@@ -198,7 +205,8 @@ public class SyncService {
         sale.setDianPrefix(payload.dianPrefix());
         sale.setSequenceNumber(payload.sequenceNumber());
         sale.setFullDocumentNumber(payload.fullDocumentNumber());
-        sale.setDianStatus(payload.dianStatus() == null ? "PENDING" : payload.dianStatus());
+        sale.setDianStatus(payload.dianStatus() == null ? "SYNCED" : payload.dianStatus());
+        sale.setStatus("ACTIVE");
         sale.setSubtotal(subtotal.setScale(2, RoundingMode.HALF_UP));
         sale.setTaxTotal(taxTotal.setScale(2, RoundingMode.HALF_UP));
         sale.setGrandTotal(subtotal.add(taxTotal).setScale(2, RoundingMode.HALF_UP));
@@ -223,7 +231,8 @@ public class SyncService {
             saleItem.setLineTotal(lineSubtotal.add(lineTax));
             saleItemRepository.save(saleItem);
 
-            productRepository.decrementStock(tenantId, item.productId(), item.quantity(), now);
+            inventoryService.applyMovement(tenantId, item.productId(), MovementType.SALE_OUT,
+                    item.quantity(), sale.getId(), "Venta " + sale.getFullDocumentNumber(), null, now);
         }
 
         terminalRepository.advanceSequence(tenantId, terminal.getId(), payload.sequenceNumber(), now);
@@ -254,7 +263,7 @@ public class SyncService {
     private ProductDto toProductDto(Product product) {
         return new ProductDto(product.getId(), product.getBarcode(), product.getSku(), product.getName(),
                 product.getSalePrice(), product.getTaxType(), product.getTaxRate(),
-                product.getCurrentStock(), product.getUpdatedAt());
+                product.getCurrentStock(), product.getMinStock(), product.getUpdatedAt());
     }
 
     private CustomerDto toCustomerDto(Customer customer) {

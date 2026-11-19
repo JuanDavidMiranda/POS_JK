@@ -126,10 +126,39 @@ export class SyncService {
         return;
       }
       await this.pushOutbox();
+      await this.flushPendingInventoryMovements();
       await this.pull();
       await this.refreshPendingCount();
     } finally {
       this.running = false;
+    }
+  }
+
+  async flushPendingInventoryMovements(): Promise<void> {
+    if (!navigator.onLine) {
+      return;
+    }
+    const pending = await db.inventoryMovements
+      .filter((m) => m.pendingSync === true)
+      .sortBy('createdAt');
+
+    for (const movement of pending) {
+      try {
+        await firstValueFrom(
+          this.http.post(`${environment.apiBaseUrl}/inventory/movements`, {
+            productId: movement.productId,
+            movementType: movement.movementType,
+            quantity: movement.quantity,
+            notes: movement.notes ?? 'Movimiento local pendiente',
+            createdBy: movement.createdBy ?? null,
+          }),
+        );
+        await db.inventoryMovements.put({ ...movement, pendingSync: false });
+      } catch (error) {
+        this.online.set(false);
+        this.message.set(`Movimiento pendiente no enviado: ${this.errorMessage(error)}`);
+        break;
+      }
     }
   }
 

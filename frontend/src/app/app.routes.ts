@@ -12,5 +12,10 @@ export const routes: Routes = [
     title: 'Historial de ventas',
     loadComponent: () => import('./features/history/history').then((module) => module.History),
   },
+  {
+    path: 'inventario',
+    title: 'Inventario',
+    loadComponent: () => import('./features/inventory/inventory').then((module) => module.Inventory),
+  },
   { path: '**', redirectTo: 'pos' },
 ];
