@@ -29,19 +29,20 @@ public class InventoryController {
 
     @PostMapping("/movements")
     @ResponseStatus(HttpStatus.CREATED)
-    public InventoryMovementResponse registerMovement(@Valid @RequestBody InventoryMovementRequest request) {
-        return inventoryService.registerMovement(request);
+    public InventoryMovementResponse recordMovement(@Valid @RequestBody InventoryMovementRequest request) {
+        return inventoryService.recordMovement(request);
     }
 
     @GetMapping("/kardex/{productId}")
     public PageResponse<InventoryMovementResponse> kardex(@PathVariable UUID productId,
+                                                          @RequestParam(required = false) UUID branchId,
                                                           @RequestParam(defaultValue = "0") int page,
                                                           @RequestParam(defaultValue = "20") int size) {
-        return inventoryService.kardex(productId, page, size);
+        return inventoryService.getKardex(productId, branchId, page, size);
     }
 
     @GetMapping("/low-stock")
-    public List<LowStockProductDto> lowStock() {
-        return inventoryService.lowStock();
+    public List<LowStockProductDto> lowStock(@RequestParam(required = false) UUID branchId) {
+        return inventoryService.getLowStock(branchId);
     }
 }

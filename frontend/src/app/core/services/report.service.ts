@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -8,27 +8,33 @@ import type { SaleSummaryResponse, TaxSummaryResponse, TopProductsResponse } fro
 export class ReportService {
   private readonly http = inject(HttpClient);
 
-  salesSummary(from: string, to: string): Promise<SaleSummaryResponse> {
+  private params(from: string, to: string, branchId?: string | null, extra?: Record<string, string>): Record<string, string> {
+    const p: Record<string, string> = { from, to, ...(extra ?? {}) };
+    if (branchId) p['branchId'] = branchId;
+    return p;
+  }
+
+  salesSummary(from: string, to: string, branchId?: string | null): Promise<SaleSummaryResponse> {
     return firstValueFrom(this.http.get<SaleSummaryResponse>(`${environment.apiBaseUrl}/api/v1/reports/sales-summary`, {
-      params: { from, to },
+      params: this.params(from, to, branchId),
     }));
   }
 
-  topProducts(from: string, to: string, limit = 20): Promise<TopProductsResponse> {
+  topProducts(from: string, to: string, limit = 20, branchId?: string | null): Promise<TopProductsResponse> {
     return firstValueFrom(this.http.get<TopProductsResponse>(`${environment.apiBaseUrl}/api/v1/reports/top-products`, {
-      params: { from, to, limit: String(limit) },
+      params: this.params(from, to, branchId, { limit: String(limit) }),
     }));
   }
 
-  taxSummary(from: string, to: string): Promise<TaxSummaryResponse> {
+  taxSummary(from: string, to: string, branchId?: string | null): Promise<TaxSummaryResponse> {
     return firstValueFrom(this.http.get<TaxSummaryResponse>(`${environment.apiBaseUrl}/api/v1/reports/tax-summary`, {
-      params: { from, to },
+      params: this.params(from, to, branchId),
     }));
   }
 
-  async downloadTaxSummaryExcel(from: string, to: string): Promise<void> {
+  async downloadTaxSummaryExcel(from: string, to: string, branchId?: string | null): Promise<void> {
     const blob = await firstValueFrom(this.http.get(`${environment.apiBaseUrl}/api/v1/reports/tax-summary/export`, {
-      params: { from, to },
+      params: this.params(from, to, branchId),
       responseType: 'blob',
     }));
     const url = URL.createObjectURL(blob);

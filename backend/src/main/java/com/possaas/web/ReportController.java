@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -32,34 +33,38 @@ public class ReportController {
     @GetMapping("/sales-summary")
     public SalesSummaryDtos.SalesSummaryResponse salesSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) UUID branchId) {
         adminAccessGuard.requireAdmin();
-        return reportService.salesSummary(from, to);
+        return reportService.salesSummary(from, to, branchId);
     }
 
     @GetMapping("/top-products")
     public TopProductDtos.TopProductsResponse topProducts(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false, defaultValue = "20") Integer limit) {
+            @RequestParam(required = false, defaultValue = "20") Integer limit,
+            @RequestParam(required = false) UUID branchId) {
         adminAccessGuard.requireAdmin();
-        return reportService.topProducts(from, to, limit);
+        return reportService.topProducts(from, to, limit, branchId);
     }
 
     @GetMapping("/tax-summary")
     public TaxSummaryDtos.TaxSummaryResponse taxSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) UUID branchId) {
         adminAccessGuard.requireAdmin();
-        return reportService.taxSummary(from, to);
+        return reportService.taxSummary(from, to, branchId);
     }
 
     @GetMapping("/tax-summary/export")
     public ResponseEntity<byte[]> exportTaxSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) UUID branchId) {
         adminAccessGuard.requireAdmin();
-        byte[] bytes = reportService.exportTaxSummary(from, to);
+        byte[] bytes = reportService.exportTaxSummary(from, to, branchId);
         String fileName = reportService.exportFileName(from, to);
         return ResponseEntity.ok()
                 .contentType(XLSX)

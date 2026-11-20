@@ -1,11 +1,15 @@
 package com.possaas.service;
 
 import com.possaas.config.TenantFilterSupport;
+import com.possaas.domain.Branch;
+import com.possaas.domain.BranchInventory;
 import com.possaas.domain.Customer;
 import com.possaas.domain.ImportJob;
 import com.possaas.domain.InventoryMovement;
 import com.possaas.domain.MovementType;
 import com.possaas.domain.Product;
+import com.possaas.repository.BranchInventoryRepository;
+import com.possaas.repository.BranchRepository;
 import com.possaas.repository.CustomerRepository;
 import com.possaas.repository.ImportJobRepository;
 import com.possaas.repository.InventoryMovementRepository;
@@ -29,6 +33,8 @@ public class ImportJobTxService {
     private final ProductRepository productRepository;
     private final CustomerRepository customerRepository;
     private final InventoryMovementRepository movementRepository;
+    private final BranchRepository branchRepository;
+    private final BranchInventoryRepository branchInventoryRepository;
     private final TenantFilterSupport tenantFilterSupport;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -147,6 +153,8 @@ public class ImportJobTxService {
 
     private boolean upsertProduct(UUID tenantId, BulkImportModels.ProductRow row) {
         Instant now = Instant.now();
+        Branch branch = resolveBranch(tenantId, row.branchCode());
+
         Product existing = null;
         if (row.barcode() != null && !row.barcode().isBlank()) {
             existing = productRepository.findByTenantIdAndBarcodeForUpdate(tenantId, row.barcode()).orElse(null);
@@ -160,7 +168,6 @@ public class ImportJobTxService {
             existing.setSalePrice(row.salePrice());
             existing.setTaxType(row.taxType());
             existing.setTaxRate(row.taxRate());
-            existing.setMinStock(nvl(row.minStock()));
             if ((existing.getBarcode() == null || existing.getBarcode().isBlank()) && row.barcode() != null) {
                 existing.setBarcode(row.barcode());
             }
@@ -169,10 +176,12 @@ public class ImportJobTxService {
             }
             existing.setUpdatedAt(now);
             productRepository.save(existing);
+            upsertInventoryMinStock(tenantId, branch.getId(), existing.getId(), row.minStock(), now);
             return false;
         }
 
         BigDecimal initial = nvl(row.initialStock());
+        BigDecimal minStock = nvl(row.minStock());
         Product product = new Product();
         product.setId(UuidV7.generate());
         product.setTenantId(tenantId);
@@ -182,27 +191,65 @@ public class ImportJobTxService {
         product.setSalePrice(row.salePrice());
         product.setTaxType(row.taxType());
         product.setTaxRate(row.taxRate());
-        product.setCurrentStock(initial);
-        product.setMinStock(nvl(row.minStock()));
-        product.setAllowNegativeStock(false);
         product.setActive(true);
         product.setUpdatedAt(now);
         productRepository.saveAndFlush(product);
 
+        BranchInventory inventory = new BranchInventory();
+        inventory.setId(UuidV7.generate());
+        inventory.setTenantId(tenantId);
+        inventory.setBranchId(branch.getId());
+        inventory.setProductId(product.getId());
+        inventory.setCurrentStock(initial);
+        inventory.setMinStock(minStock);
+        inventory.setUpdatedAt(now);
+        branchInventoryRepository.save(inventory);
+
         InventoryMovement movement = new InventoryMovement();
         movement.setId(UuidV7.generate());
         movement.setTenantId(tenantId);
+        movement.setBranchId(branch.getId());
         movement.setProductId(product.getId());
         movement.setMovementType(MovementType.INITIAL_BALANCE);
         movement.setQuantity(initial);
         movement.setPreviousStock(BigDecimal.ZERO);
         movement.setNewStock(initial);
         movement.setReferenceId(null);
-        movement.setNotes("Saldo inicial por cargue masivo");
+        movement.setNotes("Saldo inicial por cargue masivo" + (row.branchCode() != null ? " (" + branch.getCode() + ")" : ""));
         movement.setCreatedBy(null);
         movement.setCreatedAt(now);
         movementRepository.save(movement);
         return true;
+    }
+
+    private void upsertInventoryMinStock(UUID tenantId, UUID branchId, UUID productId, BigDecimal minStock, Instant now) {
+        BranchInventory inventory = branchInventoryRepository.findByTenantIdAndBranchIdAndProductId(tenantId, branchId, productId)
+                .orElseGet(() -> {
+                    BranchInventory inv = new BranchInventory();
+                    inv.setId(UuidV7.generate());
+                    inv.setTenantId(tenantId);
+                    inv.setBranchId(branchId);
+                    inv.setProductId(productId);
+                    inv.setCurrentStock(BigDecimal.ZERO);
+                    inv.setMinStock(BigDecimal.ZERO);
+                    inv.setUpdatedAt(now);
+                    return inv;
+                });
+        if (minStock != null) {
+            inventory.setMinStock(minStock);
+        }
+        inventory.setUpdatedAt(now);
+        branchInventoryRepository.save(inventory);
+    }
+
+    private Branch resolveBranch(UUID tenantId, String branchCode) {
+        if (branchCode == null || branchCode.isBlank()) {
+            return branchRepository.findByTenantIdAndMainTrue(tenantId)
+                    .orElseThrow(() -> new IllegalArgumentException("No se encontró la Sede Principal para el tenant"));
+        }
+        String normalized = branchCode.trim().toUpperCase();
+        return branchRepository.findByTenantIdAndCode(tenantId, normalized)
+                .orElseThrow(() -> new IllegalArgumentException("SEDE_CODIGO no existe: " + normalized));
     }
 
     private boolean upsertCustomer(UUID tenantId, BulkImportModels.CustomerRow row) {

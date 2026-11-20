@@ -3,6 +3,7 @@ import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { db } from '../../core/db/pos-offline.database';
 import { InventoryService } from '../../core/services/inventory.service';
 import { SyncService } from '../../core/services/sync.service';
+import { BranchContextService } from '../../core/services/branch.service';
 import {
   type InventoryMovementRecord,
   type MovementType,
@@ -19,6 +20,7 @@ import {
 export class Inventory implements OnInit {
   private readonly inventoryService = inject(InventoryService);
   readonly sync = inject(SyncService);
+  readonly branchCtx = inject(BranchContextService);
 
   readonly products = signal<Product[]>([]);
   readonly showLowStockOnly = signal(false);
@@ -29,6 +31,7 @@ export class Inventory implements OnInit {
 
   readonly movementModalOpen = signal(false);
   readonly movementProduct = signal<Product | null>(null);
+  readonly movementBranchId = signal<string>('');
   readonly movementType = signal<MovementType>('PURCHASE_IN');
   readonly movementQuantity = signal<number>(1);
   readonly movementNotes = signal('');
@@ -52,6 +55,12 @@ export class Inventory implements OnInit {
       if (this.sync.lastSyncAt()) {
         void this.reload();
       }
+    });
+    effect(() => {
+      this.branchCtx.selectedBranchId();
+      void this.reload();
+      const sel = this.selected();
+      if (sel) void this.loadKardex(sel.id);
     });
   }
 
@@ -78,7 +87,7 @@ export class Inventory implements OnInit {
 
   private async refreshLowStockIds(): Promise<void> {
     try {
-      const low = await this.inventoryService.lowStock();
+      const low = await this.inventoryService.lowStock(this.branchCtx.selectedBranchId());
       this.lowStockIds.set(new Set(low.map((p) => p.id)));
     } catch {
       this.lowStockIds.set(null);
@@ -87,6 +96,7 @@ export class Inventory implements OnInit {
 
   openMovement(product?: Product): void {
     this.movementProduct.set(product ?? this.products()[0] ?? null);
+    this.movementBranchId.set(this.branchCtx.selectedBranchId() ?? '');
     this.movementType.set('PURCHASE_IN');
     this.movementQuantity.set(1);
     this.movementNotes.set('');
@@ -111,7 +121,7 @@ export class Inventory implements OnInit {
   async loadKardex(productId: string): Promise<void> {
     this.loadingKardex.set(true);
     try {
-      const page = await this.inventoryService.kardex(productId, 0, 50);
+      const page = await this.inventoryService.kardex(productId, 0, 50, this.branchCtx.selectedBranchId());
       this.kardex.set(page.content);
     } finally {
       this.loadingKardex.set(false);
@@ -122,6 +132,11 @@ export class Inventory implements OnInit {
     const product = this.movementProduct();
     if (!product) {
       this.feedback.set('Selecciona un producto');
+      return;
+    }
+    const branchId = this.movementBranchId() || this.branchCtx.selectedBranchId();
+    if (!branchId) {
+      this.feedback.set('Selecciona la sede para registrar el movimiento');
       return;
     }
     if (this.movementQuantity() <= 0) {
@@ -137,6 +152,7 @@ export class Inventory implements OnInit {
     this.feedback.set('');
     try {
       await this.inventoryService.registerMovement({
+        branchId,
         productId: product.id,
         movementType: this.movementType(),
         quantity: this.movementQuantity(),
@@ -157,6 +173,10 @@ export class Inventory implements OnInit {
 
   setMovementProduct(id: string): void {
     this.movementProduct.set(this.products().find((p) => p.id === id) ?? null);
+  }
+
+  setMovementBranch(id: string): void {
+    this.movementBranchId.set(id);
   }
 
   setMovementType(value: string): void {
@@ -180,12 +200,14 @@ export class Inventory implements OnInit {
       CREDIT_NOTE_IN: 'Nota crédito (entrada)',
       ADJUSTMENT_IN: 'Ajuste (entrada)',
       ADJUSTMENT_OUT: 'Ajuste (salida)',
+      TRANSFER_OUT: 'Traslado (salida)',
+      TRANSFER_IN: 'Traslado (entrada)',
     };
     return labels[type] ?? type;
   }
 
   movementSign(type: MovementType): string {
-    return type === 'SALE_OUT' || type === 'ADJUSTMENT_OUT' ? '-' : '+';
+    return type === 'SALE_OUT' || type === 'ADJUSTMENT_OUT' || type === 'TRANSFER_OUT' ? '-' : '+';
   }
 
   isLow(product: Product): boolean {

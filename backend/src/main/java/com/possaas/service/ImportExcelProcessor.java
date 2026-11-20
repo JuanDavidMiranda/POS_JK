@@ -35,7 +35,7 @@ import java.util.Set;
 public class ImportExcelProcessor {
 
     private static final String[] PRODUCT_HEADERS = {
-            "barcode*", "sku*", "nombre*", "precio_venta*", "tipo_impuesto", "tarifa_impuesto", "stock_inicial*", "stock_minimo"
+            "barcode*", "sku*", "nombre*", "precio_venta*", "tipo_impuesto", "tarifa_impuesto", "stock_inicial*", "stock_minimo", "sede_codigo"
     };
     private static final String[] CUSTOMER_HEADERS = {
             "tipo_documento*", "numero_documento*", "nombre_completo*", "correo"
@@ -236,6 +236,7 @@ public class ImportExcelProcessor {
         String taxRateRaw = ExcelNormalizer.cellText(row == null ? null : row.getCell(5), evaluator);
         String initialStockRaw = ExcelNormalizer.cellText(row == null ? null : row.getCell(6), evaluator);
         String minStockRaw = ExcelNormalizer.cellText(row == null ? null : row.getCell(7), evaluator);
+        String branchCodeRaw = ExcelNormalizer.cellText(row == null ? null : row.getCell(8), evaluator);
 
         if (barcode.isBlank() && sku.isBlank()) {
             throw new IllegalArgumentException("Debe informar barcode o sku");
@@ -258,9 +259,13 @@ public class ImportExcelProcessor {
         BigDecimal salePrice = ExcelNormalizer.parseColombianMoney(priceRaw, "Precio de venta", true);
         BigDecimal initialStock = ExcelNormalizer.parseQuantity(initialStockRaw, "Stock inicial", true, 3);
         BigDecimal minStock = ExcelNormalizer.parseQuantity(minStockRaw, "Stock mínimo", false, 3);
+        String branchCode = branchCodeRaw == null ? null : branchCodeRaw.trim().toUpperCase();
+        if (branchCode != null && branchCode.isBlank()) {
+            branchCode = null;
+        }
 
         return new BulkImportModels.ProductRow(rowNumber, raw, barcode.isBlank() ? null : barcode, sku, name,
-                salePrice, taxType, taxRate, initialStock, minStock);
+                salePrice, taxType, taxRate, initialStock, minStock, branchCode);
     }
 
     private BulkImportModels.CustomerRow parseCustomerRow(Row row, int rowNumber, FormulaEvaluator evaluator, Map<String, String> raw) {
@@ -304,6 +309,7 @@ public class ImportExcelProcessor {
             m.put("tarifa_impuesto", p.taxRate() == null ? "" : p.taxRate().toPlainString());
             m.put("stock_inicial", p.initialStock() == null ? "" : p.initialStock().toPlainString());
             m.put("stock_minimo", p.minStock() == null ? "" : p.minStock().toPlainString());
+            m.put("sede_codigo", p.branchCode() == null ? "" : p.branchCode());
             return m;
         }
         if (data instanceof BulkImportModels.CustomerRow c) {

@@ -46,10 +46,12 @@ public interface CreditNoteItemRepository extends JpaRepository<CreditNoteItem, 
                and cn.dian_status <> 'REJECTED'
                and cn.created_at >= :from
                and cn.created_at < :to
+               and (:branchId is null or cn.branch_id = :branchId)
              group by p.tax_type, p.tax_rate
              order by p.tax_type, p.tax_rate
             """, nativeQuery = true)
     List<CreditTaxBreakdownProjection> creditTaxBreakdown(@Param("tenantId") UUID tenantId,
                                                           @Param("from") Instant from,
-                                                          @Param("to") Instant to);
+                                                          @Param("to") Instant to,
+                                                          @Param("branchId") UUID branchId);
 }

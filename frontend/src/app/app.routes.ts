@@ -23,6 +23,16 @@ export const routes: Routes = [
     loadComponent: () => import('./features/inventory/inventory').then((module) => module.Inventory),
   },
   {
+    path: 'traslados',
+    title: 'Traslados entre sedes',
+    loadComponent: () => import('./features/transfers/transfers').then((module) => module.Transfers),
+  },
+  {
+    path: 'sedes',
+    title: 'Sedes y cajas',
+    loadComponent: () => import('./features/branches/branches').then((module) => module.Branches),
+  },
+  {
     path: 'cargue-masivo',
     title: 'Cargue Masivo',
     loadComponent: () => import('./features/bulk-import/bulk-import').then((module) => module.BulkImport),

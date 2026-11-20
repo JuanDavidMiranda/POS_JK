@@ -2,7 +2,7 @@ import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, interval } from 'rxjs';
-import { db, readConfig, requestPersistentStorage, securityPolicyKey, sequenceKey, supervisorPinsKey } from '../db/pos-offline.database';
+import { db, lastPullKey, readConfig, requestPersistentStorage, securityPolicyKey, sequenceKey, supervisorPinsKey, terminalConfigKey } from '../db/pos-offline.database';
 import { environment } from '../../../environments/environment';
 import {
   type OutboxEvent,
@@ -60,11 +60,19 @@ export class SyncService {
   }
 
   async pull(): Promise<void> {
-    const lastPull = await readConfig<string>('last_pull_cursor');
+    const terminal = await this.terminalConfig();
+    const lastPull = await readConfig<string>(lastPullKey);
+    const params: Record<string, string> = {};
+    if (terminal?.id) {
+      params['terminalId'] = terminal.id;
+    } else {
+      params['terminalId'] = '33333333-3333-3333-3333-333333333333';
+    }
+    if (lastPull) {
+      params['since'] = lastPull;
+    }
     const response = await firstValueFrom(
-      this.http.get<PullResponse>(`${environment.apiBaseUrl}/api/v1/sync/pull`, {
-        params: lastPull ? { since: lastPull } : {},
-      }),
+      this.http.get<PullResponse>(`${environment.apiBaseUrl}/api/v1/sync/pull`, { params }),
     );
     await this.applyPull(response);
     this.lastSyncAt.set(response.serverTime);
@@ -125,7 +133,7 @@ export class SyncService {
   }
 
   async terminalConfig(): Promise<TerminalConfig | undefined> {
-    return readConfig<TerminalConfig>('terminal_config');
+    return readConfig<TerminalConfig>(terminalConfigKey);
   }
 
   async securityPolicy(): Promise<SecurityPolicy | undefined> {
@@ -134,6 +142,7 @@ export class SyncService {
 
   private async applyPull(response: PullResponse): Promise<void> {
     await db.transaction('rw', db.products, db.customers, db.config, async () => {
+      await db.products.clear();
       if (response.products.length > 0) {
         await db.products.bulkPut(response.products);
       }
@@ -141,12 +150,12 @@ export class SyncService {
         await db.customers.bulkPut(response.customers);
       }
       await db.config.put({
-        key: 'terminal_config',
+        key: terminalConfigKey,
         value: response.terminal,
         updatedAt: response.serverTime,
       });
       await db.config.put({
-        key: 'last_pull_cursor',
+        key: lastPullKey,
         value: response.serverTime,
         updatedAt: response.serverTime,
       });
@@ -178,7 +187,7 @@ export class SyncService {
       return;
     }
 
-    if (result.status === 'PROCESSED' || result.status === 'DUPLICATE') {
+    if (result.status === 'PROCESSED' || result.status === 'DUPLICATE' || result.status === 'DUPLICATE_IGNORED') {
       await db.transaction('rw', db.outbox, db.salesHistory, async () => {
         await db.outbox.delete(result.idempotencyKey);
         await db.salesHistory.update(event.payload.id, {

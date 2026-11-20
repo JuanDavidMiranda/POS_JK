@@ -25,6 +25,10 @@ public interface PosTerminalRepository extends JpaRepository<PosTerminal, UUID> 
 
     Optional<PosTerminal> findFirstByTenantIdAndActiveTrueOrderByDianPrefixAsc(UUID tenantId);
 
+    java.util.List<PosTerminal> findByTenantIdOrderByNameAsc(UUID tenantId);
+
+    java.util.List<PosTerminal> findByTenantIdAndBranchIdOrderByNameAsc(UUID tenantId, UUID branchId);
+
     @Modifying
     @Query("""
             update PosTerminal t

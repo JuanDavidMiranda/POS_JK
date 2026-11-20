@@ -26,6 +26,9 @@ public class PosTerminal {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Column(name = "branch_id", nullable = false)
+    private UUID branchId;
+
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 

@@ -8,6 +8,7 @@ import java.util.UUID;
 public record CreditNoteResponse(
         UUID id,
         UUID saleId,
+        UUID branchId,
         UUID terminalId,
         String dianPrefix,
         long sequenceNumber,

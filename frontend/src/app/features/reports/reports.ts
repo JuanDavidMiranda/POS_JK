@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { ReportService } from '../../core/services/report.service';
+import { BranchContextService } from '../../core/services/branch.service';
 import type { SaleSummaryResponse, TaxSummaryResponse, TopProductsResponse } from '../../core/models/pos.models';
 
 type Tab = 'sales' | 'top' | 'tax';
@@ -15,6 +16,7 @@ type RangePreset = 'today' | 'week' | 'month' | 'custom';
 })
 export class Reports implements OnInit {
   private readonly reportService = inject(ReportService);
+  readonly branchCtx = inject(BranchContextService);
 
   readonly tab = signal<Tab>('sales');
   readonly preset = signal<RangePreset>('month');
@@ -33,6 +35,13 @@ export class Reports implements OnInit {
     const items = this.top()?.items ?? [];
     return items.reduce((m, i) => Math.max(m, Number(i.revenue || 0)), 0) || 1;
   });
+
+  constructor() {
+    effect(() => {
+      this.branchCtx.selectedBranchId();
+      void this.refresh();
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     await this.refresh();
@@ -66,10 +75,11 @@ export class Reports implements OnInit {
     try {
       const from = this.from();
       const to = this.to();
+      const branchId = this.branchCtx.selectedBranchId();
       const [sales, top, tax] = await Promise.all([
-        this.reportService.salesSummary(from, to),
-        this.reportService.topProducts(from, to, 20),
-        this.reportService.taxSummary(from, to),
+        this.reportService.salesSummary(from, to, branchId),
+        this.reportService.topProducts(from, to, 20, branchId),
+        this.reportService.taxSummary(from, to, branchId),
       ]);
       this.sales.set(sales);
       this.top.set(top);
@@ -85,7 +95,7 @@ export class Reports implements OnInit {
     this.exporting.set(true);
     this.error.set('');
     try {
-      await this.reportService.downloadTaxSummaryExcel(this.from(), this.to());
+      await this.reportService.downloadTaxSummaryExcel(this.from(), this.to(), this.branchCtx.selectedBranchId());
     } catch (e: any) {
       this.error.set(e?.error?.message || e?.message || 'No fue posible exportar el informe tributario');
     } finally {

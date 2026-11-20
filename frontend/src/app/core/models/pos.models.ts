@@ -7,8 +7,11 @@ export type MovementType =
   | 'SALE_OUT'
   | 'CREDIT_NOTE_IN'
   | 'ADJUSTMENT_IN'
-  | 'ADJUSTMENT_OUT';
+  | 'ADJUSTMENT_OUT'
+  | 'TRANSFER_OUT'
+  | 'TRANSFER_IN';
 export type CreditNoteReason = '1' | '2' | '3';
+export type TransferStatus = 'DRAFT' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
 
 export interface Product {
   id: string;
@@ -32,8 +35,40 @@ export interface Customer {
   updatedAt: string;
 }
 
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  main: boolean;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TerminalInfo {
+  id: string;
+  branchId: string;
+  branchCode?: string | null;
+  branchName?: string | null;
+  name: string;
+  dianPrefix: string;
+  rangeFrom: number;
+  rangeTo: number;
+  lastSyncedSequence: number;
+  creditNotePrefix: string;
+  creditNoteLastSequence: number;
+  active: boolean;
+  updatedAt?: string;
+}
+
 export interface TerminalConfig {
   id: string;
+  branchId: string;
+  branchCode?: string | null;
+  branchName?: string | null;
   name: string;
   dianPrefix: string;
   rangeFrom: number;
@@ -154,10 +189,11 @@ export interface OutboxEvent {
 
 export interface SyncEventResult {
   idempotencyKey: string;
-  status: 'PROCESSED' | 'DUPLICATE' | 'REJECTED_CONFLICT';
-  saleId?: string;
-  fullDocumentNumber?: string;
+  status: 'PROCESSED' | 'DUPLICATE' | 'DUPLICATE_IGNORED' | 'REJECTED_CONFLICT';
+  saleId?: string | null;
+  fullDocumentNumber?: string | null;
   reason?: string;
+  message?: string;
 }
 
 export interface PullResponse {
@@ -179,6 +215,7 @@ export interface PushResponse {
 
 export interface InventoryMovementRecord {
   id: string;
+  branchId?: string | null;
   productId: string;
   movementType: MovementType;
   type?: MovementType;
@@ -258,9 +295,38 @@ export const money = (value: number): string => moneyFormatter.format(value ?? 0
 
 export interface LowStockProduct {
   id: string;
+  branchId?: string;
   sku?: string;
   name: string;
   currentStock: number;
   minStock: number;
   allowNegativeStock?: boolean;
+}
+
+export interface InventoryTransferItem {
+  id?: string;
+  productId: string;
+  sku?: string | null;
+  productName?: string | null;
+  quantity: number;
+}
+
+export interface InventoryTransfer {
+  id: string;
+  transferNumber: string;
+  sourceBranchId: string;
+  sourceBranchName?: string | null;
+  destinationBranchId: string;
+  destinationBranchName?: string | null;
+  status: TransferStatus;
+  notes?: string | null;
+  createdBy?: string | null;
+  receivedBy?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  dispatchedAt?: string | null;
+  receivedAt?: string | null;
+  cancelledAt?: string | null;
+  itemCount?: number;
+  items?: InventoryTransferItem[];
 }

@@ -27,6 +27,9 @@ public class CreditNote {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Column(name = "branch_id", nullable = false)
+    private UUID branchId;
+
     @Column(name = "sale_id", nullable = false)
     private UUID saleId;
 

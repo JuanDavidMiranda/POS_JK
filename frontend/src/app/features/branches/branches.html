@@ -1,0 +1,155 @@
+<section class="space-y-6">
+  <div class="flex flex-wrap items-center gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-slate-800">Sedes y Cajas</h1>
+      <p class="text-sm text-slate-500">Administra sedes (sucursales) y terminales POS. Cada caja debe pertenecer a una sede.</p>
+    </div>
+    <button type="button" (click)="loadAll()" [disabled]="loading()"
+            class="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50">
+      {{ loading() ? 'Cargando...' : 'Actualizar' }}
+    </button>
+  </div>
+
+  @if (error()) { <div class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ error() }}</div> }
+  @if (feedback()) { <div class="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ feedback() }}</div> }
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <div class="space-y-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-800">{{ editingBranchId() ? 'Editar sede' : 'Nueva sede' }}</h2>
+          @if (editingBranchId()) { <button type="button" class="text-sm text-slate-600 underline" (click)="newBranch()">Cancelar edici&oacute;n</button> }
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm sm:col-span-1">
+            <span class="font-medium text-slate-700">C&oacute;digo *</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="branchForm().code" (ngModelChange)="updateBranchField('code',$event)" placeholder="MAIN" />
+          </label>
+          <label class="block text-sm sm:col-span-1">
+            <span class="font-medium text-slate-700">Nombre *</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="branchForm().name" (ngModelChange)="updateBranchField('name',$event)" placeholder="Sede Principal" />
+          </label>
+          <label class="block text-sm sm:col-span-2">
+            <span class="font-medium text-slate-700">Direcci&oacute;n</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="branchForm().address" (ngModelChange)="updateBranchField('address',$event)" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Ciudad</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="branchForm().city" (ngModelChange)="updateBranchField('city',$event)" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Tel&eacute;fono</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="branchForm().phone" (ngModelChange)="updateBranchField('phone',$event)" />
+          </label>
+          <label class="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" [ngModel]="branchForm().active" (ngModelChange)="updateBranchField('active',$event)" class="h-4 w-4" />
+            <span class="text-slate-700">Activa</span>
+          </label>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button type="button" (click)="saveBranch()" [disabled]="savingBranch()"
+                  class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+            {{ savingBranch() ? 'Guardando...' : (editingBranchId() ? 'Actualizar sede' : 'Crear sede') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 font-semibold text-slate-800">Sedes registradas</div>
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-slate-200 text-xs uppercase text-slate-500">
+            <tr><th class="px-4 py-2">C&oacute;digo</th><th class="px-4 py-2">Nombre</th><th class="px-4 py-2">Ciudad</th><th class="px-4 py-2">Estado</th><th class="px-4 py-2"></th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @for (b of branches(); track b.id) {
+              <tr>
+                <td class="px-4 py-2 font-medium">{{ b.code }}</td>
+                <td class="px-4 py-2">{{ b.name }} @if (b.main) { <span class="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-xs text-white">Principal</span> }</td>
+                <td class="px-4 py-2 text-slate-600">{{ b.city || '-' }}</td>
+                <td class="px-4 py-2">
+                  <span class="rounded-full px-2 py-0.5 text-xs font-semibold" [class.bg-emerald-100]="b.active" [class.text-emerald-700]="b.active" [class.bg-slate-200]="!b.active" [class.text-slate-600]="!b.active">{{ b.active ? 'Activa' : 'Inactiva' }}</span>
+                </td>
+                <td class="px-4 py-2 text-right"><button type="button" (click)="editBranch(b)" class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">Editar</button></td>
+              </tr>
+            } @empty { <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No hay sedes</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-800">{{ editingTerminalId() ? 'Editar caja/terminal' : 'Nueva caja/terminal' }}</h2>
+          @if (editingTerminalId()) { <button type="button" class="text-sm text-slate-600 underline" (click)="newTerminal()">Cancelar edici&oacute;n</button> }
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="block text-sm sm:col-span-2">
+            <span class="font-medium text-slate-700">Sede *</span>
+            <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().branchId" (ngModelChange)="updateTerminalField('branchId',$event)">
+              <option value="">Selecciona una sede</option>
+              @for (b of branches(); track b.id) { <option [value]="b.id">{{ b.name }} ({{ b.code }})</option> }
+            </select>
+          </label>
+          <label class="block text-sm sm:col-span-2">
+            <span class="font-medium text-slate-700">Nombre *</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().name" (ngModelChange)="updateTerminalField('name',$event)" placeholder="Caja 1" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Prefijo DIAN *</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().dianPrefix" (ngModelChange)="updateTerminalField('dianPrefix',$event)" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Prefijo nota cr&eacute;dito</span>
+            <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().creditNotePrefix" (ngModelChange)="updateTerminalField('creditNotePrefix',$event)" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Rango desde *</span>
+            <input type="number" min="1" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().rangeFrom" (ngModelChange)="updateTerminalField('rangeFrom', +$event)" />
+          </label>
+          <label class="block text-sm">
+            <span class="font-medium text-slate-700">Rango hasta *</span>
+            <input type="number" min="1" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="terminalForm().rangeTo" (ngModelChange)="updateTerminalField('rangeTo', +$event)" />
+          </label>
+          <label class="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" [ngModel]="terminalForm().active" (ngModelChange)="updateTerminalField('active',$event)" class="h-4 w-4" />
+            <span class="text-slate-700">Activa</span>
+          </label>
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button type="button" (click)="saveTerminal()" [disabled]="savingTerminal()"
+                  class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300">
+            {{ savingTerminal() ? 'Guardando...' : (editingTerminalId() ? 'Actualizar caja' : 'Crear caja') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <span class="font-semibold text-slate-800">Cajas / Terminales</span>
+          <select class="ml-auto rounded-md border border-slate-300 px-2 py-1 text-sm" [ngModel]="terminalFilterBranchId()" (ngModelChange)="setTerminalFilter($event)">
+            <option value="">Todas las sedes</option>
+            @for (b of branches(); track b.id) { <option [value]="b.id">{{ b.name }}</option> }
+          </select>
+        </div>
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-slate-200 text-xs uppercase text-slate-500">
+            <tr><th class="px-4 py-2">Caja</th><th class="px-4 py-2">Sede</th><th class="px-4 py-2">Prefijo</th><th class="px-4 py-2">Rango</th><th class="px-4 py-2">Estado</th><th class="px-4 py-2"></th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @for (t of filteredTerminals(); track t.id) {
+              <tr>
+                <td class="px-4 py-2 font-medium">{{ t.name }}</td>
+                <td class="px-4 py-2 text-slate-600">{{ t.branchName || t.branchCode || '-' }}</td>
+                <td class="px-4 py-2">{{ t.dianPrefix }}</td>
+                <td class="px-4 py-2 text-slate-600">{{ t.rangeFrom }}&ndash;{{ t.rangeTo }}</td>
+                <td class="px-4 py-2"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" [class.bg-emerald-100]="t.active" [class.text-emerald-700]="t.active" [class.bg-slate-200]="!t.active" [class.text-slate-600]="!t.active">{{ t.active ? 'Activa' : 'Inactiva' }}</span></td>
+                <td class="px-4 py-2 text-right"><button type="button" (click)="editTerminal(t)" class="rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">Editar</button></td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No hay cajas registradas</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>

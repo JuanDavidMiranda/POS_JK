@@ -7,5 +7,7 @@ public enum MovementType {
     SALE_OUT,
     CREDIT_NOTE_IN,
     ADJUSTMENT_IN,
-    ADJUSTMENT_OUT
+    ADJUSTMENT_OUT,
+    TRANSFER_OUT,
+    TRANSFER_IN
 }

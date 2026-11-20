@@ -5,10 +5,10 @@ import java.util.UUID;
 
 public record LowStockProductDto(
         UUID id,
+        UUID branchId,
         String sku,
         String name,
         BigDecimal currentStock,
-        BigDecimal minStock,
-        boolean allowNegativeStock
+        BigDecimal minStock
 ) {
 }

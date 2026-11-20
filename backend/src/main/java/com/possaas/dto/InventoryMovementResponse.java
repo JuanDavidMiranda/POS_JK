@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public record InventoryMovementResponse(
         UUID id,
+        UUID branchId,
         UUID productId,
         String sku,
         String productName,

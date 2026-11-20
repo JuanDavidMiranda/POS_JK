@@ -27,6 +27,9 @@ public class Sale {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Column(name = "branch_id", nullable = false)
+    private UUID branchId;
+
     @Column(name = "terminal_id", nullable = false)
     private UUID terminalId;
 

@@ -33,10 +33,12 @@ public interface CreditNoteRepository extends JpaRepository<CreditNote, UUID> {
                and cn.dian_status <> 'REJECTED'
                and cn.created_at >= :from
                and cn.created_at < :to
+               and (:branchId is null or cn.branch_id = :branchId)
             """, nativeQuery = true)
     CreditNoteTotalsProjection totals(@Param("tenantId") UUID tenantId,
                                       @Param("from") Instant from,
-                                      @Param("to") Instant to);
+                                      @Param("to") Instant to,
+                                      @Param("branchId") UUID branchId);
 
     @Query(value = """
             select cast(cn.created_at at time zone 'America/Bogota' as date) as date,
@@ -46,10 +48,12 @@ public interface CreditNoteRepository extends JpaRepository<CreditNote, UUID> {
                and cn.dian_status <> 'REJECTED'
                and cn.created_at >= :from
                and cn.created_at < :to
+               and (:branchId is null or cn.branch_id = :branchId)
              group by 1
              order by 1 asc
             """, nativeQuery = true)
     List<DailyCreditNoteProjection> dailyTotals(@Param("tenantId") UUID tenantId,
                                                 @Param("from") Instant from,
-                                                @Param("to") Instant to);
+                                                @Param("to") Instant to,
+                                                @Param("branchId") UUID branchId);
 }

@@ -14,6 +14,7 @@ public final class CashShiftDtos {
 
     public record OpenRequest(
             UUID terminalId,
+            UUID branchId,
             @NotNull @DecimalMin("0") BigDecimal openingAmount,
             String notes
     ) {
@@ -28,6 +29,7 @@ public final class CashShiftDtos {
 
     public record CashShiftResponse(
             UUID id,
+            UUID branchId,
             UUID terminalId,
             UUID openedBy,
             UUID closedBy,

@@ -2,6 +2,7 @@ package com.possaas.service;
 
 import com.possaas.config.TenantContext;
 import com.possaas.config.TenantFilterSupport;
+import com.possaas.domain.BranchInventory;
 import com.possaas.domain.InventoryMovement;
 import com.possaas.domain.MovementType;
 import com.possaas.domain.Product;
@@ -9,6 +10,8 @@ import com.possaas.dto.InventoryMovementRequest;
 import com.possaas.dto.InventoryMovementResponse;
 import com.possaas.dto.LowStockProductDto;
 import com.possaas.dto.PageResponse;
+import com.possaas.repository.BranchInventoryRepository;
+import com.possaas.repository.BranchRepository;
 import com.possaas.repository.InventoryMovementRepository;
 import com.possaas.repository.ProductRepository;
 import com.possaas.util.UuidV7;
@@ -23,119 +26,103 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
 
-    private static final Set<MovementType> MANUAL_TYPES = EnumSet.of(
-            MovementType.PURCHASE_IN, MovementType.ADJUSTMENT_IN, MovementType.ADJUSTMENT_OUT);
-
-    private final ProductRepository productRepository;
+    private final BranchRepository branchRepository;
+    private final BranchInventoryRepository branchInventoryRepository;
     private final InventoryMovementRepository movementRepository;
+    private final ProductRepository productRepository;
     private final TenantFilterSupport tenantFilterSupport;
 
     @Transactional
-    public InventoryMovementResponse registerMovement(InventoryMovementRequest request) {
+    public InventoryMovementResponse recordMovement(InventoryMovementRequest request) {
         UUID tenantId = TenantContext.require();
         tenantFilterSupport.enable(tenantId);
+        return recordMovement(tenantId, request);
+    }
 
-        if (!MANUAL_TYPES.contains(request.movementType())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Solo se permiten movimientos manuales: PURCHASE_IN, ADJUSTMENT_IN o ADJUSTMENT_OUT");
+    @Transactional
+    public InventoryMovementResponse recordMovement(UUID tenantId, InventoryMovementRequest request) {
+        if (request.branchId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "branchId es obligatorio para registrar movimientos");
         }
         if (request.quantity() == null || request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad debe ser mayor a cero");
         }
-        if (request.notes() == null || request.notes().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La observación es obligatoria");
-        }
 
-        InventoryMovement movement = applyMovement(tenantId, request.productId(), request.movementType(),
-                request.quantity(), null, request.notes().trim(), request.createdBy(), Instant.now());
-        Product product = productRepository.findById(request.productId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
-        return toResponse(movement, product);
-    }
+        branchRepository.findByTenantIdAndId(tenantId, request.branchId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La sede no existe o no pertenece al tenant"));
 
-    @Transactional(readOnly = true)
-    public PageResponse<InventoryMovementResponse> kardex(UUID productId, int page, int size) {
-        UUID tenantId = TenantContext.require();
-        tenantFilterSupport.enable(tenantId);
-
-        Product product = productRepository.findById(productId)
-                .filter(p -> tenantId.equals(p.getTenantId()))
+        Product product = productRepository.findByTenantIdAndIdForUpdate(tenantId, request.productId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
 
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), 100);
-        Page<InventoryMovement> result = movementRepository.findByTenantIdAndProductId(
-                tenantId, productId, PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        BranchInventory inventory = getOrCreateInventoryForUpdate(tenantId, request.branchId(), product.getId());
+        BigDecimal previousStock = inventory.getCurrentStock() == null ? BigDecimal.ZERO : inventory.getCurrentStock();
+        BigDecimal newStock = applyMovement(previousStock, request.movementType(), request.quantity());
 
-        List<InventoryMovementResponse> content = result.getContent().stream()
-                .map(m -> toResponse(m, product))
-                .toList();
-        return new PageResponse<>(content, result.getNumber(), result.getSize(),
-                result.getTotalElements(), result.getTotalPages());
-    }
-
-    @Transactional(readOnly = true)
-    public List<LowStockProductDto> lowStock() {
-        UUID tenantId = TenantContext.require();
-        tenantFilterSupport.enable(tenantId);
-
-        return productRepository.findLowStock(tenantId).stream()
-                .map(p -> new LowStockProductDto(p.getId(), p.getSku(), p.getName(),
-                        p.getCurrentStock(), p.getMinStock(), Boolean.TRUE.equals(p.getAllowNegativeStock())))
-                .toList();
-    }
-
-    /**
-     * Aplica un cambio de stock y registra el movimiento en la transacción actual.
-     * Debe llamarse con el tenant filter ya habilitado cuando se usa desde otros servicios.
-     */
-    @Transactional
-    public InventoryMovement applyMovement(UUID tenantId,
-                                          UUID productId,
-                                          MovementType movementType,
-                                          BigDecimal quantity,
-                                          UUID referenceId,
-                                          String notes,
-                                          UUID createdBy,
-                                          Instant now) {
-        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad del movimiento debe ser mayor a cero");
-        }
-
-        Product product = productRepository.findByTenantIdAndIdForUpdate(tenantId, productId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Producto no encontrado: " + productId));
-
-        BigDecimal previous = nvl(product.getCurrentStock());
-        BigDecimal delta = signedDelta(movementType, quantity);
-        BigDecimal next = previous.add(delta);
-
-        if (next.compareTo(BigDecimal.ZERO) < 0 && !Boolean.TRUE.equals(product.getAllowNegativeStock())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Stock insuficiente para " + product.getName() + " (actual: " + previous + ")");
-        }
-
-        product.setCurrentStock(next);
-        product.setUpdatedAt(now);
-        productRepository.save(product);
+        Instant now = Instant.now();
+        inventory.setCurrentStock(newStock);
+        inventory.setUpdatedAt(now);
+        branchInventoryRepository.save(inventory);
 
         InventoryMovement movement = new InventoryMovement();
         movement.setId(UuidV7.generate());
         movement.setTenantId(tenantId);
+        movement.setBranchId(request.branchId());
+        movement.setProductId(product.getId());
+        movement.setMovementType(request.movementType());
+        movement.setQuantity(request.quantity());
+        movement.setPreviousStock(previousStock);
+        movement.setNewStock(newStock);
+        movement.setReferenceId(null);
+        movement.setNotes(request.notes());
+        movement.setCreatedBy(request.createdBy());
+        movement.setCreatedAt(now);
+        movementRepository.save(movement);
+
+        return toResponse(movement, product);
+    }
+
+    @Transactional
+    public InventoryMovement createSystemMovement(UUID tenantId,
+                                                  UUID branchId,
+                                                  UUID productId,
+                                                  MovementType movementType,
+                                                  BigDecimal quantity,
+                                                  UUID referenceId,
+                                                  String notes,
+                                                  UUID createdBy) {
+        tenantFilterSupport.enable(tenantId);
+        if (branchId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "branchId es obligatorio");
+        }
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad debe ser mayor a cero");
+        }
+        Product product = productRepository.findByTenantIdAndIdForUpdate(tenantId, productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
+        BranchInventory inventory = getOrCreateInventoryForUpdate(tenantId, branchId, productId);
+        BigDecimal previousStock = inventory.getCurrentStock() == null ? BigDecimal.ZERO : inventory.getCurrentStock();
+        BigDecimal newStock = applyMovement(previousStock, movementType, quantity);
+        Instant now = Instant.now();
+        inventory.setCurrentStock(newStock);
+        inventory.setUpdatedAt(now);
+        branchInventoryRepository.save(inventory);
+
+        InventoryMovement movement = new InventoryMovement();
+        movement.setId(UuidV7.generate());
+        movement.setTenantId(tenantId);
+        movement.setBranchId(branchId);
         movement.setProductId(productId);
         movement.setMovementType(movementType);
         movement.setQuantity(quantity);
-        movement.setPreviousStock(previous);
-        movement.setNewStock(next);
+        movement.setPreviousStock(previousStock);
+        movement.setNewStock(newStock);
         movement.setReferenceId(referenceId);
         movement.setNotes(notes);
         movement.setCreatedBy(createdBy);
@@ -143,23 +130,90 @@ public class InventoryService {
         return movementRepository.save(movement);
     }
 
-    private BigDecimal signedDelta(MovementType type, BigDecimal quantity) {
-        return switch (type) {
-            case SALE_OUT, ADJUSTMENT_OUT -> quantity.negate();
-            case PURCHASE_IN, CREDIT_NOTE_IN, ADJUSTMENT_IN, INITIAL_BALANCE -> quantity;
-        };
+    @Transactional(readOnly = true)
+    public PageResponse<InventoryMovementResponse> getKardex(UUID productId, UUID branchId, int page, int size) {
+        UUID tenantId = TenantContext.require();
+        tenantFilterSupport.enable(tenantId);
+        if (!productRepository.existsByIdAndTenantId(productId, tenantId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+        }
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<InventoryMovement> result = (branchId != null)
+                ? movementRepository.findByTenantIdAndBranchIdAndProductId(tenantId, branchId, productId, pageable)
+                : movementRepository.findByTenantIdAndProductId(tenantId, productId, pageable);
+        List<InventoryMovementResponse> content = result.getContent().stream()
+                .map(this::toResponse)
+                .toList();
+        return new PageResponse<>(content, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
-    private BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+    @Transactional(readOnly = true)
+    public List<LowStockProductDto> getLowStock(UUID branchId) {
+        UUID tenantId = TenantContext.require();
+        tenantFilterSupport.enable(tenantId);
+        if (branchId != null) {
+            branchRepository.findByTenantIdAndId(tenantId, branchId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La sede no existe o no pertenece al tenant"));
+            return branchInventoryRepository.findLowStock(tenantId, branchId).stream()
+                    .map(this::toLowStockDto)
+                    .toList();
+        }
+        return branchInventoryRepository.findByTenantId(tenantId).stream()
+                .filter(inv -> inv.getCurrentStock() != null && inv.getMinStock() != null
+                        && inv.getCurrentStock().compareTo(inv.getMinStock()) <= 0)
+                .map(this::toLowStockDto)
+                .toList();
+    }
+
+    @Transactional
+    public BranchInventory getOrCreateInventoryForUpdate(UUID tenantId, UUID branchId, UUID productId) {
+        return branchInventoryRepository.findForUpdate(tenantId, branchId, productId)
+                .orElseGet(() -> {
+                    BranchInventory inventory = new BranchInventory();
+                    inventory.setId(UuidV7.generate());
+                    inventory.setTenantId(tenantId);
+                    inventory.setBranchId(branchId);
+                    inventory.setProductId(productId);
+                    inventory.setCurrentStock(BigDecimal.ZERO);
+                    inventory.setMinStock(BigDecimal.ZERO);
+                    inventory.setUpdatedAt(Instant.now());
+                    return branchInventoryRepository.save(inventory);
+                });
+    }
+
+    @Transactional(readOnly = true)
+    public BranchInventory getInventory(UUID tenantId, UUID branchId, UUID productId) {
+        tenantFilterSupport.enable(tenantId);
+        return branchInventoryRepository.findByTenantIdAndBranchIdAndProductId(tenantId, branchId, productId)
+                .orElse(null);
+    }
+
+    private BigDecimal applyMovement(BigDecimal previousStock, MovementType movementType, BigDecimal quantity) {
+        boolean increases = switch (movementType) {
+            case INITIAL_BALANCE, PURCHASE_IN, CREDIT_NOTE_IN, ADJUSTMENT_IN, TRANSFER_IN -> true;
+            case SALE_OUT, ADJUSTMENT_OUT, TRANSFER_OUT -> false;
+        };
+        BigDecimal newStock = increases ? previousStock.add(quantity) : previousStock.subtract(quantity);
+        if (newStock.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Stock insuficiente. Disponible: " + previousStock + ", solicitado: " + quantity);
+        }
+        return newStock;
+    }
+
+    private InventoryMovementResponse toResponse(InventoryMovement movement) {
+        Product product = productRepository.findById(movement.getProductId()).orElse(null);
+        return toResponse(movement, product);
     }
 
     private InventoryMovementResponse toResponse(InventoryMovement movement, Product product) {
         return new InventoryMovementResponse(
                 movement.getId(),
+                movement.getBranchId(),
                 movement.getProductId(),
-                product.getSku(),
-                product.getName(),
+                product != null ? product.getSku() : null,
+                product != null ? product.getName() : null,
                 movement.getMovementType(),
                 movement.getQuantity(),
                 movement.getPreviousStock(),
@@ -167,6 +221,19 @@ public class InventoryService {
                 movement.getReferenceId(),
                 movement.getNotes(),
                 movement.getCreatedBy(),
-                movement.getCreatedAt());
+                movement.getCreatedAt()
+        );
+    }
+
+    private LowStockProductDto toLowStockDto(BranchInventory inventory) {
+        Product product = productRepository.findById(inventory.getProductId()).orElse(null);
+        return new LowStockProductDto(
+                inventory.getProductId(),
+                inventory.getBranchId(),
+                product != null ? product.getSku() : null,
+                product != null ? product.getName() : null,
+                inventory.getCurrentStock(),
+                inventory.getMinStock()
+        );
     }
 }

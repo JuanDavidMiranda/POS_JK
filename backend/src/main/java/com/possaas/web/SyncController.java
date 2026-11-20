@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/sync")
@@ -27,9 +28,10 @@ public class SyncController {
 
     @GetMapping("/pull")
     public SyncPullResponse pull(
+            @RequestParam(name = "terminalId", required = false) UUID terminalId,
             @RequestParam(name = "since", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant since) {
-        return syncService.pull(since);
+        return syncService.pull(terminalId, since);
     }
 
     @PostMapping("/push")

@@ -10,7 +10,7 @@ import java.util.UUID;
 public record CreditNoteRequest(
         @NotNull UUID id,
         @NotNull UUID saleId,
-        @NotNull UUID terminalId,
+        UUID terminalId,
         @NotBlank String reasonCode,
         @NotBlank String reasonDescription,
         @Valid @NotNull List<CreditNoteItemRequest> items

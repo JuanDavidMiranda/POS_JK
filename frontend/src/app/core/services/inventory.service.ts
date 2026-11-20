@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { v7 as uuidv7 } from 'uuid';
@@ -8,6 +8,7 @@ import { round2, type InventoryMovementRecord, type MovementType } from '../mode
 
 export interface LowStockProduct {
   id: string;
+  branchId?: string;
   sku?: string;
   name: string;
   currentStock: number;
@@ -15,23 +16,27 @@ export interface LowStockProduct {
   allowNegativeStock?: boolean;
 }
 
-export interface KardexPage {
-  content: InventoryMovementRecord[];
+export interface PageResponse<T> {
+  content: T[];
   page: number;
   size: number;
   totalElements: number;
   totalPages: number;
 }
 
+export type KardexPage = PageResponse<InventoryMovementRecord>;
+
 @Injectable({ providedIn: 'root' })
 export class InventoryService {
   private readonly http = inject(HttpClient);
 
-  async lowStock(): Promise<LowStockProduct[]> {
+  async lowStock(branchId?: string | null): Promise<LowStockProduct[]> {
     if (navigator.onLine) {
       try {
+        const params: Record<string, string> = {};
+        if (branchId) params['branchId'] = branchId;
         const remote = await firstValueFrom(
-          this.http.get<LowStockProduct[]>(`${environment.apiBaseUrl}/api/v1/inventory/low-stock`),
+          this.http.get<LowStockProduct[]>(`${environment.apiBaseUrl}/api/v1/inventory/low-stock`, { params }),
         );
         return remote;
       } catch {
@@ -52,11 +57,11 @@ export class InventoryService {
       }));
   }
 
-  async kardex(productId: string, page = 0, size = 20): Promise<KardexPage> {
+  async kardex(productId: string, page = 0, size = 20, branchId?: string | null): Promise<KardexPage> {
     const remotePromise = navigator.onLine
       ? firstValueFrom(
           this.http.get<KardexPage>(`${environment.apiBaseUrl}/api/v1/inventory/kardex/${productId}`, {
-            params: { page, size },
+            params: { page: String(page), size: String(size), ...(branchId ? { branchId } : {}) },
           }),
         ).catch(() => null)
       : Promise.resolve(null);
@@ -66,13 +71,19 @@ export class InventoryService {
       return remote;
     }
 
-    const all = await db.inventoryMovements.where('productId').equals(productId).reverse().sortBy('createdAt');
+    const all = await db.inventoryMovements
+      .where('productId')
+      .equals(productId)
+      .filter((m) => !branchId || m.branchId === branchId)
+      .reverse()
+      .sortBy('createdAt');
     const start = page * size;
     const content = all.slice(start, start + size);
     return { content, page, size, totalElements: all.length, totalPages: Math.max(1, Math.ceil(all.length / size)) };
   }
 
   async registerMovement(input: {
+    branchId?: string | null;
     productId: string;
     movementType: MovementType;
     quantity: number;
@@ -92,7 +103,6 @@ export class InventoryService {
         await this.applyLocalMovement(response, false);
         return response;
       } catch (error) {
-        // caer a registro local si no hay backend alcanzable
         if (navigator.onLine) {
           throw error;
         }
@@ -102,6 +112,7 @@ export class InventoryService {
   }
 
   private async registerLocalMovement(input: {
+    branchId?: string | null;
     productId: string;
     movementType: MovementType;
     quantity: number;
@@ -115,7 +126,7 @@ export class InventoryService {
       }
       const previous = product.currentStock;
       const delta =
-        input.movementType === 'PURCHASE_IN' || input.movementType === 'ADJUSTMENT_IN'
+        input.movementType === 'PURCHASE_IN' || input.movementType === 'ADJUSTMENT_IN' || input.movementType === 'INITIAL_BALANCE' || input.movementType === 'CREDIT_NOTE_IN' || input.movementType === 'TRANSFER_IN'
           ? input.quantity
           : -input.quantity;
       const next = round2(previous + delta);
@@ -125,6 +136,7 @@ export class InventoryService {
       await db.products.update(product.id, { currentStock: next, updatedAt: now });
       const movement: InventoryMovementRecord = {
         id: uuidv7(),
+        branchId: input.branchId ?? null,
         productId: product.id,
         sku: product.sku,
         productName: product.name,
@@ -146,7 +158,7 @@ export class InventoryService {
   private async applyLocalMovement(response: InventoryMovementRecord, pendingSync: boolean): Promise<void> {
     await db.transaction('rw', db.products, db.inventoryMovements, async () => {
       await db.products.update(response.productId, {
-        currentStock: response.newStock,
+        currentStock: response.newStock ?? (response as any).resultingStock,
         updatedAt: response.createdAt,
       });
       await db.inventoryMovements.put({ ...response, pendingSync });

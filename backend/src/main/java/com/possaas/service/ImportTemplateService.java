@@ -56,12 +56,12 @@ public class ImportTemplateService {
     private void buildProductsTemplate(XSSFWorkbook workbook) {
         String[] headers = {
                 "barcode*", "sku*", "nombre*", "precio_venta*", "tipo_impuesto",
-                "tarifa_impuesto", "stock_inicial*", "stock_minimo"
+                "tarifa_impuesto", "stock_inicial*", "stock_minimo", "sede_codigo"
         };
         String[] example = {
-                "7702511000012", "ARR-001", "Arroz Diana 500g", "2800", "IVA", "0", "50", "10"
+                "7702511000012", "ARR-001", "Arroz Diana 500g", "2800", "IVA", "0", "50", "10", "MAIN"
         };
-        Sheet data = createDataSheet(workbook, "Datos", headers, example, new int[]{0, 1});
+        Sheet data = createDataSheet(workbook, "Datos", headers, example, new int[]{0, 1, 8});
 
         List<String[]> instructions = List.of(
                 new String[]{"barcode*", "Código de barras del producto. Obligatorio si no se identifica por SKU. Se lee como texto para conservar ceros a la izquierda."},
@@ -70,8 +70,9 @@ public class ImportTemplateService {
                 new String[]{"precio_venta*", "Precio de venta. Acepta formato colombiano: 2800, 2.800, $ 2.800,00."},
                 new String[]{"tipo_impuesto", "IVA, INC o EXENTO. Si se deja vacío se asume EXENTO."},
                 new String[]{"tarifa_impuesto", "0, 5 o 19 (también 0.05/0.19). Si se deja vacío: 0 para EXENTO/INC según regla y 19 para IVA."},
-                new String[]{"stock_inicial*", "Cantidad inicial. Para productos NUEVOS se crea saldo inicial y movimiento INITIAL_BALANCE en kardex. Para productos existentes NO se modifica el stock actual."},
-                new String[]{"stock_minimo", "Umbral de alerta de inventario bajo. Si se deja vacío se asume 0."},
+                new String[]{"stock_inicial*", "Cantidad inicial. Para productos NUEVOS se crea saldo inicial y movimiento INITIAL_BALANCE en el kardex de la sede indicada (o sede principal si está vacío). Para productos existentes NO se modifica el stock actual."},
+                new String[]{"stock_minimo", "Umbral de alerta de inventario bajo por sede. Si se deja vacío se asume 0."},
+                new String[]{"sede_codigo", "Código de la sede donde aplica el stock inicial/mínimo (ej: MAIN). Opcional: si se deja vacío se usa la Sede Principal del tenant."},
                 new String[]{"Upsert", "Se actualiza por (tenant, barcode) o por (tenant, sku) si no hay barcode. En actualización: nombre, precio e impuestos; el stock vivo no se sobrescribe."},
                 new String[]{"Límites", "Máximo 5.000 filas de datos y archivo de hasta 5 MB."}
         );

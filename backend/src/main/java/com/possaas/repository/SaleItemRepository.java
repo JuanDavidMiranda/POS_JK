@@ -43,6 +43,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, UUID> {
                and s.status <> 'VOIDED'
                and s.sold_at >= :from
                and s.sold_at < :to
+               and (:branchId is null or s.branch_id = :branchId)
              group by si.product_id, p.sku, p.name
              order by revenue desc
              limit :limit
@@ -50,7 +51,8 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, UUID> {
     List<TopProductProjection> topProducts(@Param("tenantId") UUID tenantId,
                                            @Param("from") Instant from,
                                            @Param("to") Instant to,
-                                           @Param("limit") int limit);
+                                           @Param("limit") int limit,
+                                           @Param("branchId") UUID branchId);
 
     @Query(value = """
             select p.tax_type as taxType,
@@ -65,10 +67,12 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, UUID> {
                and s.status <> 'VOIDED'
                and s.sold_at >= :from
                and s.sold_at < :to
+               and (:branchId is null or s.branch_id = :branchId)
              group by p.tax_type, p.tax_rate
              order by p.tax_type, p.tax_rate
             """, nativeQuery = true)
     List<TaxBreakdownProjection> taxBreakdown(@Param("tenantId") UUID tenantId,
                                               @Param("from") Instant from,
-                                              @Param("to") Instant to);
+                                              @Param("to") Instant to,
+                                              @Param("branchId") UUID branchId);
 }

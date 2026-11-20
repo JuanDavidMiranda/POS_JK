@@ -6,6 +6,7 @@ import com.possaas.domain.CreditNote;
 import com.possaas.domain.CreditNoteItem;
 import com.possaas.domain.MovementType;
 import com.possaas.domain.PosTerminal;
+import com.possaas.domain.Product;
 import com.possaas.domain.Sale;
 import com.possaas.domain.SaleItem;
 import com.possaas.dto.CreditNoteItemRequest;
@@ -19,6 +20,7 @@ import com.possaas.repository.PosTerminalRepository;
 import com.possaas.repository.ReturnedQuantity;
 import com.possaas.repository.SaleItemRepository;
 import com.possaas.repository.SaleRepository;
+import com.possaas.repository.ProductRepository;
 import com.possaas.util.UuidV7;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,7 +32,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ public class CreditNoteService {
     private final PosTerminalRepository terminalRepository;
     private final CreditNoteRepository creditNoteRepository;
     private final CreditNoteItemRepository creditNoteItemRepository;
+    private final ProductRepository productRepository;
     private final InventoryService inventoryService;
     private final ElectronicBillingProvider billingProvider;
     private final TenantFilterSupport tenantFilterSupport;
@@ -80,7 +82,8 @@ public class CreditNoteService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La venta ya se encuentra anulada");
         }
 
-        PosTerminal terminal = terminalRepository.findByTenantIdAndIdForUpdate(tenantId, request.terminalId())
+        UUID terminalId = request.terminalId() != null ? request.terminalId() : sale.getTerminalId();
+        PosTerminal terminal = terminalRepository.findByTenantIdAndIdForUpdate(tenantId, terminalId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "La terminal no pertenece al tenant"));
 
@@ -119,9 +122,12 @@ public class CreditNoteService {
                         "Cantidad a devolver excede lo disponible para " + entry.getKey());
             }
 
-            BigDecimal lineSubtotal = saleItem.getUnitPrice().multiply(qty)
-                    .setScale(2, RoundingMode.HALF_UP);
-            BigDecimal lineTax = lineSubtotal.multiply(saleItem.getTaxRate()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal lineSubtotal = saleItem.getUnitPrice().multiply(qty).setScale(2, RoundingMode.HALF_UP);
+            Product product = productRepository.findById(entry.getKey()).orElse(null);
+            BigDecimal rate = (product != null && product.getTaxRate() != null) ? product.getTaxRate() : BigDecimal.ZERO;
+            boolean excluded = product != null && "EXCLUIDO".equalsIgnoreCase(product.getTaxType());
+            BigDecimal lineTax = excluded ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                    : lineSubtotal.multiply(rate).setScale(2, RoundingMode.HALF_UP);
             BigDecimal lineTotal = lineSubtotal.add(lineTax);
 
             CreditNoteItem noteItem = new CreditNoteItem();
@@ -157,9 +163,12 @@ public class CreditNoteService {
                 ? "NC1" : terminal.getCreditNotePrefix();
         String fullNumber = prefix + "-" + String.format("%06d", sequence);
 
+        UUID branchId = sale.getBranchId() != null ? sale.getBranchId() : terminal.getBranchId();
+
         CreditNote creditNote = new CreditNote();
         creditNote.setId(request.id());
         creditNote.setTenantId(tenantId);
+        creditNote.setBranchId(branchId);
         creditNote.setSaleId(sale.getId());
         creditNote.setTerminalId(terminal.getId());
         creditNote.setDianPrefix(prefix);
@@ -176,10 +185,10 @@ public class CreditNoteService {
         creditNoteItemRepository.saveAll(noteItems);
 
         for (CreditNoteItem item : noteItems) {
-            inventoryService.applyMovement(tenantId, item.getProductId(), MovementType.CREDIT_NOTE_IN,
+            inventoryService.createSystemMovement(tenantId, branchId, item.getProductId(), MovementType.CREDIT_NOTE_IN,
                     item.getQuantity(), creditNote.getId(),
                     "Nota crédito " + fullNumber + " - " + request.reasonDescription().trim(),
-                    null, now);
+                    null);
         }
 
         sale.setStatus(fullReturn ? "VOIDED" : "PARTIALLY_RETURNED");
@@ -221,7 +230,7 @@ public class CreditNoteService {
                 .toList();
 
         String saleStatus = saleRepository.findById(note.getSaleId()).map(Sale::getStatus).orElse(null);
-        return new CreditNoteResponse(note.getId(), note.getSaleId(), note.getTerminalId(),
+        return new CreditNoteResponse(note.getId(), note.getSaleId(), note.getBranchId(), note.getTerminalId(),
                 note.getDianPrefix(), note.getSequenceNumber(), note.getFullDocumentNumber(),
                 note.getReasonCode(), note.getReasonDescription(), note.getDianStatus(), note.getCude(),
                 note.getSubtotal(), note.getTaxTotal(), note.getGrandTotal(), note.getCreatedAt(),

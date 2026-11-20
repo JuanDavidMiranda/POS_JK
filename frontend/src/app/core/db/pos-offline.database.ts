@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import {
+  type Branch,
   type CashShiftRecord,
   type ConfigRecord,
   type CreditNoteRecord,
@@ -19,6 +20,7 @@ class PosOfflineDatabase extends Dexie {
   inventoryMovements!: EntityTable<InventoryMovementRecord, 'id'>;
   creditNotes!: EntityTable<CreditNoteRecord, 'id'>;
   cashShifts!: EntityTable<CashShiftRecord, 'id'>;
+  branches!: EntityTable<Branch, 'id'>;
 
   constructor() {
     super('PosOfflineDatabase');
@@ -48,6 +50,21 @@ class PosOfflineDatabase extends Dexie {
       creditNotes: 'id, saleId, createdAt',
       cashShifts: 'id, status, openedAt, closedAt',
     });
+    this.version(4).stores({
+      products: 'id, sku, barcode, name, updatedAt, minStock',
+      customers: 'id, documentNumber, updatedAt',
+      config: 'key',
+      outbox: 'idempotencyKey, createdAt, entityType',
+      salesHistory: 'id, fullDocumentNumber, sequenceNumber, status, soldAt, cashShiftId',
+      inventoryMovements: 'id, productId, branchId, createdAt',
+      creditNotes: 'id, saleId, createdAt',
+      cashShifts: 'id, status, openedAt, closedAt',
+      branches: 'id, code, name, isMain, isActive',
+    }).upgrade(async (tx) => {
+      // Limpia catǭlogo cacheado para forzar pull branch-aware en el siguiente sync
+      await tx.table('products').clear();
+      await tx.table('config').delete('last_pull_cursor');
+    });
   }
 }
 
@@ -58,6 +75,7 @@ export const lastPullKey = 'last_pull_cursor';
 export const demoTenantKey = 'tenant_id';
 export const securityPolicyKey = 'security_policy';
 export const supervisorPinsKey = 'supervisor_pins';
+export const selectedAdminBranchKey = 'selected_admin_branch_id';
 
 export async function readConfig<T>(key: string): Promise<T | undefined> {
   const record = await db.config.get(key);

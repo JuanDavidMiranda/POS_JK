@@ -1,6 +1,7 @@
 package com.possaas.service;
 
 import com.possaas.config.TenantContext;
+import com.possaas.config.TenantFilterSupport;
 import com.possaas.dto.report.SalesSummaryDtos;
 import com.possaas.dto.report.TaxSummaryDtos;
 import com.possaas.dto.report.TopProductDtos;
@@ -47,14 +48,16 @@ public class ReportService {
     private final SaleItemRepository saleItemRepository;
     private final CreditNoteRepository creditNoteRepository;
     private final CreditNoteItemRepository creditNoteItemRepository;
+    private final TenantFilterSupport tenantFilterSupport;
 
     @Transactional(readOnly = true)
-    public SalesSummaryDtos.SalesSummaryResponse salesSummary(LocalDate from, LocalDate to) {
+    public SalesSummaryDtos.SalesSummaryResponse salesSummary(LocalDate from, LocalDate to, UUID branchId) {
         Range range = range(from, to);
         UUID tenantId = TenantContext.require();
+        tenantFilterSupport.enable(tenantId);
 
-        SaleRepository.SalesTotalsProjection totals = saleRepository.totals(tenantId, range.from(), range.to());
-        CreditNoteRepository.CreditNoteTotalsProjection cnTotals = creditNoteRepository.totals(tenantId, range.from(), range.to());
+        SaleRepository.SalesTotalsProjection totals = saleRepository.totals(tenantId, range.from(), range.to(), branchId);
+        CreditNoteRepository.CreditNoteTotalsProjection cnTotals = creditNoteRepository.totals(tenantId, range.from(), range.to(), branchId);
 
         BigDecimal gross = nz(totals == null ? null : totals.getGrossSales());
         BigDecimal tax = nz(totals == null ? null : totals.getTaxTotal());
@@ -63,7 +66,7 @@ public class ReportService {
         BigDecimal net = gross.subtract(cn).setScale(2, RoundingMode.HALF_UP);
         BigDecimal avg = tx > 0 ? gross.divide(BigDecimal.valueOf(tx), 2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-        List<SalesSummaryDtos.PaymentBreakdown> payments = saleRepository.paymentBreakdown(tenantId, range.from(), range.to())
+        List<SalesSummaryDtos.PaymentBreakdown> payments = saleRepository.paymentBreakdown(tenantId, range.from(), range.to(), branchId)
                 .stream()
                 .map(p -> new SalesSummaryDtos.PaymentBreakdown(
                         p.getPaymentMethod(),
@@ -72,13 +75,13 @@ public class ReportService {
                 .toList();
 
         Map<LocalDate, BigDecimal> cnByDay = new HashMap<>();
-        for (CreditNoteRepository.DailyCreditNoteProjection d : creditNoteRepository.dailyTotals(tenantId, range.from(), range.to())) {
+        for (CreditNoteRepository.DailyCreditNoteProjection d : creditNoteRepository.dailyTotals(tenantId, range.from(), range.to(), branchId)) {
             if (d.getDate() != null) {
                 cnByDay.put(d.getDate(), nz(d.getTotal()));
             }
         }
 
-        List<SalesSummaryDtos.DailyBreakdown> daily = saleRepository.dailyBreakdown(tenantId, range.from(), range.to())
+        List<SalesSummaryDtos.DailyBreakdown> daily = saleRepository.dailyBreakdown(tenantId, range.from(), range.to(), branchId)
                 .stream()
                 .map(d -> {
                     BigDecimal dayGross = nz(d.getGrossSales());
@@ -99,12 +102,13 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public TopProductDtos.TopProductsResponse topProducts(LocalDate from, LocalDate to, Integer limit) {
+    public TopProductDtos.TopProductsResponse topProducts(LocalDate from, LocalDate to, Integer limit, UUID branchId) {
         Range range = range(from, to);
         UUID tenantId = TenantContext.require();
+        tenantFilterSupport.enable(tenantId);
         int lim = (limit == null || limit <= 0) ? 20 : Math.min(limit, 200);
 
-        List<SaleItemRepository.TopProductProjection> rows = saleItemRepository.topProducts(tenantId, range.from(), range.to(), lim);
+        List<SaleItemRepository.TopProductProjection> rows = saleItemRepository.topProducts(tenantId, range.from(), range.to(), lim, branchId);
         BigDecimal totalRevenue = rows.stream().map(r -> nz(r.getRevenue())).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalUnits = rows.stream().map(r -> nz(r.getUnitsSold())).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(3, RoundingMode.HALF_UP);
 
@@ -121,17 +125,18 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public TaxSummaryDtos.TaxSummaryResponse taxSummary(LocalDate from, LocalDate to) {
+    public TaxSummaryDtos.TaxSummaryResponse taxSummary(LocalDate from, LocalDate to, UUID branchId) {
         Range range = range(from, to);
         UUID tenantId = TenantContext.require();
+        tenantFilterSupport.enable(tenantId);
 
         Map<String, TaxSummaryDtos.TaxRow> merged = new LinkedHashMap<>();
 
-        for (SaleItemRepository.TaxBreakdownProjection r : saleItemRepository.taxBreakdown(tenantId, range.from(), range.to())) {
+        for (SaleItemRepository.TaxBreakdownProjection r : saleItemRepository.taxBreakdown(tenantId, range.from(), range.to(), branchId)) {
             String key = key(r.getTaxType(), r.getTaxRate());
             merged.put(key, row(r.getTaxType(), r.getTaxRate(), nz(r.getTaxableBase()), nz(r.getTaxAmount()), nz(r.getTotal())));
         }
-        for (CreditNoteItemRepository.CreditTaxBreakdownProjection r : creditNoteItemRepository.creditTaxBreakdown(tenantId, range.from(), range.to())) {
+        for (CreditNoteItemRepository.CreditTaxBreakdownProjection r : creditNoteItemRepository.creditTaxBreakdown(tenantId, range.from(), range.to(), branchId)) {
             String key = key(r.getTaxType(), r.getTaxRate());
             TaxSummaryDtos.TaxRow existing = merged.get(key);
             BigDecimal base = nz(r.getTaxableBase()).negate();
@@ -158,8 +163,8 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportTaxSummary(LocalDate from, LocalDate to) {
-        TaxSummaryDtos.TaxSummaryResponse summary = taxSummary(from, to);
+    public byte[] exportTaxSummary(LocalDate from, LocalDate to, UUID branchId) {
+        TaxSummaryDtos.TaxSummaryResponse summary = taxSummary(from, to, branchId);
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Resumen Tributario");
 
@@ -185,6 +190,8 @@ public class ReportService {
             Cell toCell = meta2.createCell(3);
             toCell.setCellValue(java.sql.Date.valueOf(to));
             toCell.setCellStyle(dateStyle);
+            meta2.createCell(4).setCellValue("Sede");
+            meta2.createCell(5).setCellValue(branchId == null ? "Todas" : branchId.toString());
             r++; // blank
 
             Row header = sheet.createRow(r++);

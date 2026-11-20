@@ -3,8 +3,10 @@ package com.possaas.service;
 import com.possaas.config.TenantContext;
 import com.possaas.config.TenantFilterSupport;
 import com.possaas.domain.CashShift;
+import com.possaas.domain.PosTerminal;
 import com.possaas.dto.CashShiftDtos;
 import com.possaas.repository.CashShiftRepository;
+import com.possaas.repository.PosTerminalRepository;
 import com.possaas.repository.UserRepository;
 import com.possaas.util.UuidV7;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import java.util.UUID;
 public class CashShiftService {
 
     private final CashShiftRepository cashShiftRepository;
+    private final PosTerminalRepository terminalRepository;
     private final UserRepository userRepository;
     private final TenantFilterSupport tenantFilterSupport;
 
@@ -35,11 +38,27 @@ public class CashShiftService {
                 .ifPresent(s -> {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un turno de caja abierto");
                 });
+
+        UUID branchId = request.branchId();
+        UUID terminalId = request.terminalId();
+        if (terminalId != null) {
+            PosTerminal terminal = terminalRepository.findByTenantIdAndId(tenantId, terminalId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terminal no encontrada"));
+            if (branchId != null && !branchId.equals(terminal.getBranchId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La terminal no pertenece a la sede indicada");
+            }
+            branchId = terminal.getBranchId();
+        }
+        if (branchId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe indicar terminalId o branchId para abrir el turno");
+        }
+
         Instant now = Instant.now();
         CashShift shift = new CashShift();
         shift.setId(UuidV7.generate());
         shift.setTenantId(tenantId);
-        shift.setTerminalId(request.terminalId());
+        shift.setBranchId(branchId);
+        shift.setTerminalId(terminalId);
         shift.setStatus("OPEN");
         shift.setOpeningAmount(nz(request.openingAmount()));
         shift.setOpenedAt(now);
@@ -101,7 +120,7 @@ public class CashShiftService {
 
     private CashShiftDtos.CashShiftResponse toDto(CashShift s) {
         return new CashShiftDtos.CashShiftResponse(
-                s.getId(), s.getTerminalId(), s.getOpenedBy(), s.getClosedBy(), s.getAuthorizedByUserId(),
+                s.getId(), s.getBranchId(), s.getTerminalId(), s.getOpenedBy(), s.getClosedBy(), s.getAuthorizedByUserId(),
                 s.getStatus(), s.getOpeningAmount(), s.getExpectedCashAmount(), s.getCountedCashAmount(),
                 s.getDifferenceAmount(), s.getOpenedAt(), s.getClosedAt(), s.getNotes());
     }

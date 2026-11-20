@@ -52,10 +52,12 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                and s.status <> 'VOIDED'
                and s.sold_at >= :from
                and s.sold_at < :to
+               and (:branchId is null or s.branch_id = :branchId)
             """, nativeQuery = true)
     SalesTotalsProjection totals(@Param("tenantId") UUID tenantId,
                                  @Param("from") Instant from,
-                                 @Param("to") Instant to);
+                                 @Param("to") Instant to,
+                                 @Param("branchId") UUID branchId);
 
     @Query(value = """
             select s.payment_method as paymentMethod,
@@ -66,12 +68,14 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                and s.status <> 'VOIDED'
                and s.sold_at >= :from
                and s.sold_at < :to
+               and (:branchId is null or s.branch_id = :branchId)
              group by s.payment_method
              order by grossTotal desc
             """, nativeQuery = true)
     List<PaymentBreakdownProjection> paymentBreakdown(@Param("tenantId") UUID tenantId,
                                                       @Param("from") Instant from,
-                                                      @Param("to") Instant to);
+                                                      @Param("to") Instant to,
+                                                      @Param("branchId") UUID branchId);
 
     @Query(value = """
             select cast(s.sold_at at time zone 'America/Bogota' as date) as date,
@@ -83,10 +87,12 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                and s.status <> 'VOIDED'
                and s.sold_at >= :from
                and s.sold_at < :to
+               and (:branchId is null or s.branch_id = :branchId)
              group by 1
              order by 1 asc
             """, nativeQuery = true)
     List<DailyBreakdownProjection> dailyBreakdown(@Param("tenantId") UUID tenantId,
                                                   @Param("from") Instant from,
-                                                  @Param("to") Instant to);
+                                                  @Param("to") Instant to,
+                                                  @Param("branchId") UUID branchId);
 }

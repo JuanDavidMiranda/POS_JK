@@ -18,7 +18,8 @@ public final class BulkImportModels {
             String taxType,
             BigDecimal taxRate,
             BigDecimal initialStock,
-            BigDecimal minStock
+            BigDecimal minStock,
+            String branchCode
     ) {
         public String identifier() {
             if (barcode != null && !barcode.isBlank()) {

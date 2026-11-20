@@ -45,15 +45,6 @@ public class Product {
     @Column(name = "tax_rate", nullable = false, precision = 5, scale = 4)
     private BigDecimal taxRate;
 
-    @Column(name = "current_stock", nullable = false, precision = 14, scale = 3)
-    private BigDecimal currentStock;
-
-    @Column(name = "min_stock", nullable = false, precision = 12, scale = 3)
-    private BigDecimal minStock;
-
-    @Column(name = "allow_negative_stock", nullable = false)
-    private Boolean allowNegativeStock;
-
     @Column(name = "is_active", nullable = false)
     private Boolean active;
 

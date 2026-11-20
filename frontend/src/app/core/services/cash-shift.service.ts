@@ -1,10 +1,11 @@
-import { Injectable, inject } from '@angular/core';
+﻿import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface CashShiftResponse {
   id: string;
+  branchId?: string | null;
   terminalId?: string | null;
   openedBy?: string | null;
   closedBy?: string | null;
@@ -23,7 +24,7 @@ export interface CashShiftResponse {
 export class CashShiftService {
   private readonly http = inject(HttpClient);
 
-  open(request: { terminalId?: string | null; openingAmount: number; notes?: string }): Promise<CashShiftResponse> {
+  open(request: { terminalId?: string | null; branchId?: string | null; openingAmount: number; notes?: string }): Promise<CashShiftResponse> {
     return firstValueFrom(this.http.post<CashShiftResponse>(`${environment.apiBaseUrl}/api/v1/cash-shifts/open`, request));
   }
 

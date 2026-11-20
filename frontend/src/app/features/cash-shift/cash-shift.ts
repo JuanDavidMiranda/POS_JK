@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+﻿import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import { SyncService } from '../../core/services/sync.service';
 import { CashShiftService, type CashShiftResponse } from '../../core/services/cash-shift.service';
 import { PinAuthService } from '../../core/services/pin-auth.service';
 import { SupervisorPinModal } from '../../shared/components/supervisor-pin-modal/supervisor-pin-modal';
-import { readConfig } from '../../core/db/pos-offline.database';
-import { securityPolicyKey } from '../../core/db/pos-offline.database';
+import { readConfig, securityPolicyKey } from '../../core/db/pos-offline.database';
 import type { SecurityPolicy } from '../../core/models/pos.models';
 
 @Component({
@@ -62,6 +61,7 @@ export class CashShift implements OnInit {
       const terminal = await this.sync.terminalConfig();
       const shift = await this.cashShiftService.open({
         terminalId: terminal?.id ?? null,
+        branchId: terminal?.branchId ?? null,
         openingAmount: Number(this.openingAmount()) || 0,
       });
       this.current.set(shift);
@@ -87,7 +87,6 @@ export class CashShift implements OnInit {
       this.error.set('Ingresa y confirma el conteo físico antes de ver el esperado.');
       return;
     }
-    // cierre auditado: solicitar PIN de supervisor si se dispone (recomendado) / registrar autorización
     this.pendingClose = true;
     this.pinOpen.set(true);
     this.pinError.set('');
@@ -110,7 +109,6 @@ export class CashShift implements OnInit {
   }
 
   onPinCancel(): void {
-    // permitir cierre sin PIN solo si no se pudo validar pero el usuario decide? mejor cerrar flujo; para auditoría se requiere PIN si hay supervisor.
     this.pinOpen.set(false);
     this.pendingClose = false;
   }

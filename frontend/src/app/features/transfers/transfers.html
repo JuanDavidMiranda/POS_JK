@@ -1,0 +1,144 @@
+<section class="space-y-6">
+  <div class="flex flex-wrap items-center gap-3">
+    <div>
+      <h1 class="text-xl font-bold text-slate-800">Traslados entre sedes</h1>
+      <p class="text-sm text-slate-500">Crea traslados (descuenta origen al despachar), confirma recepci&oacute;n en destino o cancela en tr&aacute;nsito.</p>
+    </div>
+    <button type="button" (click)="loadTransfers()" class="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50">Actualizar lista</button>
+  </div>
+
+  @if (error()) { <div class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ error() }}</div> }
+  @if (feedback()) { <div class="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{{ feedback() }}</div> }
+
+  <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-semibold text-slate-800">Nuevo traslado</h2>
+    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+      <label class="block text-sm">
+        <span class="font-medium text-slate-700">Sede origen *</span>
+        <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="sourceBranchId()" (ngModelChange)="onSourceChange($event)">
+          <option value="">Selecciona origen</option>
+          @for (b of branches(); track b.id) { <option [value]="b.id">{{ b.name }} ({{ b.code }})</option> }
+        </select>
+      </label>
+      <label class="block text-sm">
+        <span class="font-medium text-slate-700">Sede destino *</span>
+        <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="destinationBranchId()" (ngModelChange)="onDestChange($event)">
+          <option value="">Selecciona destino</option>
+          @for (b of branches(); track b.id) { <option [value]="b.id" [disabled]="b.id===sourceBranchId()">{{ b.name }} ({{ b.code }})</option> }
+        </select>
+      </label>
+      <label class="block text-sm">
+        <span class="font-medium text-slate-700">Notas</span>
+        <input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" [ngModel]="notes()" (ngModelChange)="notes.set($event)" placeholder="Opcional" />
+      </label>
+    </div>
+
+    <div class="mt-5 grid gap-4 lg:grid-cols-2">
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="font-medium text-slate-800">Productos (stock en origen)</h3>
+          @if (originLoading()) { <span class="text-xs text-slate-500">Cargando...</span> }
+        </div>
+        <input type="search" class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Buscar por nombre, SKU o c&oacute;digo de barras"
+               [ngModel]="productSearch()" (ngModelChange)="productSearch.set($event)" />
+        <div class="mt-2 max-h-80 overflow-auto rounded-lg border border-slate-200">
+          <table class="w-full text-left text-sm">
+            <thead class="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
+              <tr><th class="px-3 py-2">Producto</th><th class="px-3 py-2 text-right">Stock origen</th><th class="px-3 py-2 text-right">Cantidad</th><th class="px-3 py-2"></th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              @for (p of filteredOriginProducts(); track p.id) {
+                <tr>
+                  <td class="px-3 py-2"><div class="font-medium text-slate-800">{{ p.name }}</div><div class="text-xs text-slate-500">{{ p.sku }}</div></td>
+                  <td class="px-3 py-2 text-right font-semibold" [class.text-rose-700]="p.originStock <= 0">{{ p.originStock | number:'1.0-3' }}</td>
+                  <td class="px-3 py-2 text-right"><input type="number" min="0" step="0.001" class="w-24 rounded border border-slate-300 px-2 py-1 text-right" [ngModel]="qtyByProduct()[p.id] ?? ''" (ngModelChange)="setQty(p.id, $event)" /></td>
+                  <td class="px-3 py-2 text-right"><button type="button" (click)="addItem(p)" class="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700">Agregar</button></td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="px-3 py-6 text-center text-slate-400">{{ sourceBranchId() ? 'Sin productos' : 'Selecciona la sede origen para ver stock' }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="font-medium text-slate-800">&Iacute;tems del traslado</h3>
+        <div class="mt-2 overflow-hidden rounded-lg border border-slate-200">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-3 py-2">Producto</th><th class="px-3 py-2 text-right">Cantidad</th><th class="px-3 py-2"></th></tr></thead>
+            <tbody class="divide-y divide-slate-100">
+              @for (item of draftItems(); track item.productId) {
+                <tr>
+                  <td class="px-3 py-2">
+                    @for (p of originProducts(); track p.id) {
+                      @if (p.id === item.productId) {
+                        <div class="font-medium text-slate-800">{{ p.name }}</div>
+                        <div class="text-xs text-slate-500">{{ p.sku }}</div>
+                      }
+                    }
+                  </td>
+                  <td class="px-3 py-2 text-right font-semibold">{{ item.quantity | number:'1.0-3' }}</td>
+                  <td class="px-3 py-2 text-right"><button type="button" (click)="removeItem(item.productId)" class="text-xs text-rose-700 hover:underline">Quitar</button></td>
+                </tr>
+              } @empty { <tr><td colspan="3" class="px-3 py-6 text-center text-slate-400">Sin &iacute;tems agregados</td></tr> }
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button type="button" (click)="createTransfer()" [disabled]="creating()"
+                  class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300">
+            {{ creating() ? 'Creando...' : 'Crear y despachar traslado' }}
+          </button>
+        </div>
+        <p class="mt-2 text-xs text-slate-500">Al crear, el traslado pasa a <b>EN TR&Aacute;NSITO</b> y se descuenta el stock en la sede origen (movimiento TRANSFER_OUT).</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div class="flex flex-wrap items-center gap-3">
+      <h2 class="text-lg font-semibold text-slate-800">Historial de traslados</h2>
+      <select class="rounded-md border border-slate-300 px-2 py-1 text-sm" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); loadTransfers()">
+        <option value="">Todos los estados</option>
+        <option value="IN_TRANSIT">En tr&aacute;nsito</option>
+        <option value="COMPLETED">Completado</option>
+        <option value="CANCELLED">Cancelado</option>
+      </select>
+      <select class="rounded-md border border-slate-300 px-2 py-1 text-sm" [ngModel]="listSource()" (ngModelChange)="listSource.set($event); loadTransfers()">
+        <option value="">Origen: todas</option>
+        @for (b of branches(); track b.id) { <option [value]="b.id">Origen: {{ b.name }}</option> }
+      </select>
+      <select class="rounded-md border border-slate-300 px-2 py-1 text-sm" [ngModel]="listDest()" (ngModelChange)="listDest.set($event); loadTransfers()">
+        <option value="">Destino: todas</option>
+        @for (b of branches(); track b.id) { <option [value]="b.id">Destino: {{ b.name }}</option> }
+      </select>
+    </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="border-b border-slate-200 text-xs uppercase text-slate-500">
+          <tr><th class="py-2 pr-3">N&uacute;mero</th><th class="py-2 pr-3">Origen &rarr; Destino</th><th class="py-2 pr-3">&Iacute;tems</th><th class="py-2 pr-3">Estado</th><th class="py-2 pr-3">Fecha</th><th class="py-2 text-right">Acciones</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          @for (t of transfers(); track t.id) {
+            <tr>
+              <td class="py-3 pr-3 font-semibold text-slate-800">{{ t.transferNumber }}</td>
+              <td class="py-3 pr-3 text-slate-700">{{ t.sourceBranchName || branchName(t.sourceBranchId) }} &rarr; {{ t.destinationBranchName || branchName(t.destinationBranchId) }}</td>
+              <td class="py-3 pr-3">{{ t.itemCount ?? (t.items?.length ?? 0) }}</td>
+              <td class="py-3 pr-3"><span class="rounded-full px-2 py-1 text-xs font-bold" [class]="statusClass(t.status)">{{ statusLabel(t.status) }}</span></td>
+              <td class="py-3 pr-3 text-slate-600">{{ t.createdAt | date:'short' }}</td>
+              <td class="py-3 text-right">
+                @if (t.status === 'IN_TRANSIT') {
+                  <div class="flex justify-end gap-2">
+                    <button type="button" (click)="receive(t)" [disabled]="actionBusyId()===t.id" class="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Confirmar recepci&oacute;n</button>
+                    <button type="button" (click)="cancel(t)" [disabled]="actionBusyId()===t.id" class="rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Cancelar</button>
+                  </div>
+                } @else { <span class="text-xs text-slate-400">-</span> }
+              </td>
+            </tr>
+          } @empty { <tr><td colspan="6" class="py-8 text-center text-slate-400">No hay traslados registrados</td></tr> }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

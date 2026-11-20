@@ -15,6 +15,10 @@
            class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Historial</a>
         <a routerLink="/inventario" routerLinkActive="bg-slate-900 text-white"
            class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Inventario</a>
+        <a routerLink="/traslados" routerLinkActive="bg-slate-900 text-white"
+           class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Traslados</a>
+        <a routerLink="/sedes" routerLinkActive="bg-slate-900 text-white"
+           class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Sedes y Cajas</a>
         <a routerLink="/cargue-masivo" routerLinkActive="bg-slate-900 text-white"
            class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Cargue Masivo</a>
         <a routerLink="/reportes" routerLinkActive="bg-slate-900 text-white"
@@ -23,7 +27,19 @@
            class="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-200">Seguridad</a>
       </nav>
 
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <label class="flex items-center gap-2 text-sm text-slate-600" title="Filtro global para módulos administrativos (Inventario, Kardex, Reportes)">
+          <span class="hidden lg:inline font-medium">Sede:</span>
+          <select class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                  [value]="branchCtx.selectedBranchId() ?? ''"
+                  (change)="onBranchChange($event)">
+            <option value="">Todas las sedes</option>
+            @for (b of branchCtx.branches(); track b.id) {
+              <option [value]="b.id">{{ b.name }}{{ b.main ? ' (Principal)' : '' }}</option>
+            }
+          </select>
+        </label>
+
         <span class="h-2.5 w-2.5 rounded-full"
               [class.bg-emerald-500]="sync.online()"
               [class.bg-rose-500]="!sync.online()"></span>

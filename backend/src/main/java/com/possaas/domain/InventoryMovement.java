@@ -29,6 +29,9 @@ public class InventoryMovement {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
+    @Column(name = "branch_id", nullable = false)
+    private UUID branchId;
+
     @Column(name = "product_id", nullable = false)
     private UUID productId;
 
