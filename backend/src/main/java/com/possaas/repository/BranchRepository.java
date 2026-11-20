@@ -18,4 +18,6 @@ public interface BranchRepository extends JpaRepository<Branch, UUID> {
     Optional<Branch> findByTenantIdAndMainTrue(UUID tenantId);
 
     boolean existsByTenantIdAndCode(UUID tenantId, String code);
+
+    long countByTenantId(UUID tenantId);
 }

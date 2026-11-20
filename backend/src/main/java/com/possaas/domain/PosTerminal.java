@@ -10,6 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.Filter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -49,6 +50,21 @@ public class PosTerminal {
 
     @Column(name = "credit_note_last_sequence", nullable = false)
     private Long creditNoteLastSequence;
+
+    @Column(name = "dian_resolution_number", length = 60)
+    private String dianResolutionNumber;
+
+    @Column(name = "dian_resolution_date")
+    private LocalDate dianResolutionDate;
+
+    @Column(name = "dian_valid_from")
+    private LocalDate dianValidFrom;
+
+    @Column(name = "dian_valid_to")
+    private LocalDate dianValidTo;
+
+    @Column(name = "dian_technical_key", length = 120)
+    private String dianTechnicalKey;
 
     @Column(name = "is_active", nullable = false)
     private Boolean active;

@@ -95,6 +95,41 @@ public class HttpElectronicBillingProvider implements ElectronicBillingProvider 
         }
     }
 
+    @Override
+    public DianVerificationResult verifyConfiguration(DianVerificationRequest request) {
+        if (request.rangeFrom() == null || request.rangeTo() == null || request.rangeFrom() < 1 || request.rangeTo() < request.rangeFrom()) {
+            return new DianVerificationResult(false, mode, "El rango DIAN es invalido");
+        }
+        if (request.validFrom() != null && request.validTo() != null && request.validTo().isBefore(request.validFrom())) {
+            return new DianVerificationResult(false, mode, "La vigencia DIAN es invalida (fecha fin anterior a inicio)");
+        }
+        if (!"HTTP".equalsIgnoreCase(mode) || endpoint.isBlank()) {
+            return new DianVerificationResult(true, "SIMULATED",
+                    "Configuracion DIAN validada en modo simulado. Conectividad con proveedor pendiente de modo HTTP.");
+        }
+        // En modo HTTP, la verificacion completa de resolucion depende del proveedor;
+        // validamos conectividad basica (alcance del endpoint) y estructura local.
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(10))
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody());
+            if (!apiKey.isBlank()) {
+                builder.header("Authorization", "Bearer " + apiKey);
+            }
+            HttpResponse<Void> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.discarding());
+            if (response.statusCode() >= 200 && response.statusCode() < 500) {
+                return new DianVerificationResult(true, "HTTP",
+                        "Conectividad con proveedor DIAN verificada (HTTP " + response.statusCode() + ").");
+            }
+            return new DianVerificationResult(false, "HTTP",
+                    "Proveedor DIAN no disponible (HTTP " + response.statusCode() + ")");
+        } catch (Exception ex) {
+            return new DianVerificationResult(false, "HTTP",
+                    "No fue posible verificar conectividad con proveedor DIAN: " + ex.getMessage());
+        }
+    }
+
     private String truncate(String value, int max) {
         if (value == null) {
             return "";

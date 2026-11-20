@@ -1,7 +1,10 @@
 package com.possaas.service;
 
+import com.possaas.config.AuthPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestAttributes;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -12,7 +15,7 @@ import java.util.UUID;
 
 /**
  * Restringe operaciones administrativas a usuarios con rol ADMIN.
- * Mientras se integra JWT, el rol/usuario se reciben por headers confiables del cliente autenticado.
+ * Soporta autenticación JWT (principal) y, para compatibilidad legacy/offline, headers X-User-Role/X-User-Id.
  */
 @Component
 public class AdminAccessGuard {
@@ -25,6 +28,14 @@ public class AdminAccessGuard {
     }
 
     public UUID currentAdminUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AuthPrincipal principal) {
+            if ("ADMIN".equalsIgnoreCase(principal.role()) || "SUPER_ADMIN".equalsIgnoreCase(principal.role())) {
+                return principal.userId();
+            }
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Acceso restringido: se requiere rol ADMIN");
+        }
+
         HttpServletRequest request = currentRequest();
         String role = header(request, ROLE_HEADER);
         if (role == null || !"ADMIN".equalsIgnoreCase(role.trim())) {
@@ -38,7 +49,7 @@ public class AdminAccessGuard {
         try {
             return UUID.fromString(rawUser.trim());
         } catch (IllegalArgumentException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-User-Id debe ser un UUID válido");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-User-Id debe ser un UUID valido");
         }
     }
 
@@ -52,6 +63,6 @@ public class AdminAccessGuard {
         if (attributes instanceof ServletRequestAttributes servletAttributes) {
             return servletAttributes.getRequest();
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No hay contexto de petición para validar rol ADMIN");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No hay contexto de peticion para validar rol ADMIN");
     }
 }

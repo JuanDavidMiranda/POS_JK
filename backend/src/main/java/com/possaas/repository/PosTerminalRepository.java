@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,9 +26,9 @@ public interface PosTerminalRepository extends JpaRepository<PosTerminal, UUID> 
 
     Optional<PosTerminal> findFirstByTenantIdAndActiveTrueOrderByDianPrefixAsc(UUID tenantId);
 
-    java.util.List<PosTerminal> findByTenantIdOrderByNameAsc(UUID tenantId);
+    List<PosTerminal> findByTenantIdOrderByNameAsc(UUID tenantId);
 
-    java.util.List<PosTerminal> findByTenantIdAndBranchIdOrderByNameAsc(UUID tenantId, UUID branchId);
+    List<PosTerminal> findByTenantIdAndBranchIdOrderByNameAsc(UUID tenantId, UUID branchId);
 
     @Modifying
     @Query("""
@@ -54,4 +55,13 @@ public interface PosTerminalRepository extends JpaRepository<PosTerminal, UUID> 
                                   @Param("terminalId") UUID terminalId,
                                   @Param("sequence") long sequence,
                                   @Param("now") Instant now);
+
+    // Phase 3.2 helpers
+    List<PosTerminal> findByTenantIdAndActiveTrue(UUID tenantId);
+
+    List<PosTerminal> findByTenantId(UUID tenantId);
+
+    Optional<PosTerminal> findFirstByTenantIdAndName(UUID tenantId, String name);
+
+    long countByTenantId(UUID tenantId);
 }

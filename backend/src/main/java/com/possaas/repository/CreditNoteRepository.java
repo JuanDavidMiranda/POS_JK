@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CreditNoteRepository extends JpaRepository<CreditNote, UUID> {
@@ -56,4 +57,20 @@ public interface CreditNoteRepository extends JpaRepository<CreditNote, UUID> {
                                                 @Param("from") Instant from,
                                                 @Param("to") Instant to,
                                                 @Param("branchId") UUID branchId);
+
+    // Phase 3.2 helpers
+    Optional<CreditNote> findByTenantIdAndId(UUID tenantId, UUID id);
+
+    Optional<CreditNote> findByTenantIdAndFullDocumentNumber(UUID tenantId, String fullDocumentNumber);
+
+    List<CreditNote> findByTenantIdAndSaleId(UUID tenantId, UUID saleId);
+
+    List<CreditNote> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+
+    @Query("""
+            select c from CreditNote c
+             where c.tenantId = :tenantId and (c.dianStatus = 'REJECTED' or c.dianStatus = 'PENDING_TRANSMISSION')
+             order by c.createdAt desc
+            """)
+    List<CreditNote> findDianPendingOrErrorByTenant(@Param("tenantId") UUID tenantId);
 }

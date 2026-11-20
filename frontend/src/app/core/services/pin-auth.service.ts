@@ -1,6 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { readConfig } from '../db/pos-offline.database';
-import { DEMO_TENANT_ID } from '../interceptors/tenant-header.interceptor';
+import { AuthService } from './auth.service';
 import { securityPolicyKey, supervisorPinsKey } from '../db/pos-offline.database';
 import type { SecurityPolicy, SupervisorUser } from '../models/pos.models';
 
@@ -11,6 +11,7 @@ export interface PinAuthorizationResult {
 
 @Injectable({ providedIn: 'root' })
 export class PinAuthService {
+  private readonly auth = inject(AuthService);
 
   async getPolicy(): Promise<SecurityPolicy> {
     const policy = await readConfig<SecurityPolicy>(securityPolicyKey);
@@ -31,7 +32,9 @@ export class PinAuthService {
     if (!supervisors.length || !pin) {
       return null;
     }
-    const hash = await this.hashPin(DEMO_TENANT_ID, pin);
+    const tenantId = this.auth.tenant()?.id;
+    if (!tenantId) return null;
+    const hash = await this.hashPin(tenantId, pin);
     const match = supervisors.find((s) => s.pinHash === hash);
     if (!match) {
       return null;

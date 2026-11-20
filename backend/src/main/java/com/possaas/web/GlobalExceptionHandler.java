@@ -56,6 +56,18 @@ public class GlobalExceptionHandler {
                 .body(new ApiError(Instant.now(), HttpStatus.BAD_REQUEST.value(), ex.getMessage(), Map.of()));
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError(Instant.now(), HttpStatus.FORBIDDEN.value(), "Acceso denegado", Map.of()));
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiError> handleAuthentication(org.springframework.security.core.AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError(Instant.now(), HttpStatus.UNAUTHORIZED.value(), "No autenticado", Map.of()));
+    }
+
     public record ApiError(Instant timestamp, int status, String message, Map<String, String> errors) {
     }
 }

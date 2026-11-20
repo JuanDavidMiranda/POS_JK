@@ -95,4 +95,36 @@ public interface SaleRepository extends JpaRepository<Sale, UUID> {
                                                   @Param("from") Instant from,
                                                   @Param("to") Instant to,
                                                   @Param("branchId") UUID branchId);
+
+    // Existing + Phase 3.2 helpers
+    Optional<Sale> findByTenantIdAndFullDocumentNumber(UUID tenantId, String fullDocumentNumber);
+
+    Optional<Sale> findByTenantIdAndId(UUID tenantId, UUID id);
+
+    List<Sale> findByTenantIdAndBranchIdAndSoldAtBetween(UUID tenantId, UUID branchId, Instant from, Instant to);
+
+    List<Sale> findByTenantIdAndSoldAtBetween(UUID tenantId, Instant from, Instant to);
+
+    List<Sale> findByTenantIdAndCashShiftId(UUID tenantId, UUID cashShiftId);
+
+    @Query("""
+            select coalesce(sum(s.grandTotal), 0) from Sale s
+             where s.soldAt >= :from and s.soldAt < :to
+            """)
+    BigDecimal sumGrandTotalBetweenAllTenants(@Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("""
+            select count(s) from Sale s
+             where s.soldAt >= :from and s.soldAt < :to
+            """)
+    long countBetweenAllTenants(@Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("""
+            select s from Sale s
+             where s.tenantId = :tenantId and (s.dianStatus = 'REJECTED' or s.dianStatus = 'PENDING' or s.dianStatus = 'PENDING_TRANSMISSION')
+             order by s.soldAt desc
+            """)
+    List<Sale> findDianPendingOrErrorByTenant(@Param("tenantId") UUID tenantId);
+
+    Optional<Sale> findTopByTenantIdOrderBySyncedAtDesc(UUID tenantId);
 }

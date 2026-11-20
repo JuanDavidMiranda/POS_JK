@@ -16,4 +16,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findByTenantIdAndActiveTrueAndSupervisorPinHashIsNotNull(UUID tenantId);
 
     List<User> findByTenantIdAndRoleInAndActiveTrueAndSupervisorPinHashIsNotNull(UUID tenantId, List<String> roles);
+
+    // Phase 3.2 auth/onboarding
+    List<User> findByTenantIdAndActiveTrue(UUID tenantId);
+
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    Optional<User> findByEmailIgnoreCaseAndActiveTrue(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
+
+    Optional<User> findByTenantIdAndUsernameIgnoreCase(UUID tenantId, String username);
 }

@@ -6,13 +6,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface SyncInboxLogRepository extends JpaRepository<SyncInboxLog, UUID> {
 
     /**
      * Reclama la clave de idempotencia. Devuelve 1 si es nueva y 0 si ya fue procesada.
-     * Todo ocurre dentro de la transacción del push: si falla la venta, el reclamo se revierte.
+     * Todo ocurre dentro de la transaccion del push: si falla la venta, el reclamo se revierte.
      */
     @Modifying
     @Query(value = """
@@ -28,4 +29,7 @@ public interface SyncInboxLogRepository extends JpaRepository<SyncInboxLog, UUID
     @Query(value = "UPDATE sync_inbox_log SET response_payload = CAST(:payload AS jsonb) WHERE idempotency_key = :key",
             nativeQuery = true)
     int saveResponse(@Param("key") UUID key, @Param("payload") String payload);
+
+    // Phase 3.2 health
+    Optional<SyncInboxLog> findTopByTenantIdOrderByProcessedAtDesc(UUID tenantId);
 }

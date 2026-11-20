@@ -2,9 +2,14 @@ package com.possaas.repository;
 
 import com.possaas.domain.Customer;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CustomerRepository extends JpaRepository<Customer, UUID> {
@@ -13,19 +18,24 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     boolean existsByIdAndTenantId(UUID id, UUID tenantId);
 
-    java.util.Optional<Customer> findByTenantIdAndDocumentTypeAndDocumentNumber(UUID tenantId,
-                                                                                String documentType,
-                                                                                String documentNumber);
+    Optional<Customer> findByTenantIdAndDocumentTypeAndDocumentNumber(UUID tenantId,
+                                                                       String documentType,
+                                                                       String documentNumber);
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @org.springframework.data.jpa.repository.Query("""
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
             select c from Customer c
              where c.tenantId = :tenantId
                and c.documentType = :documentType
                and c.documentNumber = :documentNumber
             """)
-    java.util.Optional<Customer> findByTenantIdAndDocumentTypeAndDocumentNumberForUpdate(
-            @org.springframework.data.repository.query.Param("tenantId") UUID tenantId,
-            @org.springframework.data.repository.query.Param("documentType") String documentType,
-            @org.springframework.data.repository.query.Param("documentNumber") String documentNumber);
+    Optional<Customer> findByTenantIdAndDocumentTypeAndDocumentNumberForUpdate(
+            @Param("tenantId") UUID tenantId,
+            @Param("documentType") String documentType,
+            @Param("documentNumber") String documentNumber);
+
+    // Phase 3.2 helpers
+    List<Customer> findByTenantId(UUID tenantId);
+
+    Optional<Customer> findByTenantIdAndId(UUID tenantId, UUID id);
 }

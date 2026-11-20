@@ -45,6 +45,9 @@ logging:
 app:
   cors:
     allowed-origin: ${CORS_ORIGIN:http://localhost:4200}
+  jwt:
+    secret: ${JWT_SECRET:change-this-dev-secret-key-at-least-32-bytes-long-for-hs256!!}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:43200}
   dian:
     mode: ${DIAN_MODE:SIMULATED}
     endpoint: ${DIAN_ENDPOINT:}

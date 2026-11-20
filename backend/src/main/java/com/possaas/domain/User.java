@@ -23,7 +23,7 @@ public class User {
     @Id
     private UUID id;
 
-    @Column(name = "tenant_id", nullable = false)
+    @Column(name = "tenant_id")
     private UUID tenantId;
 
     @Column(name = "username", nullable = false, length = 80)
@@ -32,8 +32,14 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 200)
     private String fullName;
 
+    @Column(name = "email", length = 120)
+    private String email;
+
     @Column(name = "role", nullable = false, length = 20)
     private String role;
+
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
 
     @Column(name = "supervisor_pin_hash", length = 255)
     private String supervisorPinHash;

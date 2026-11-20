@@ -1,17 +1,22 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+﻿import { HttpInterceptorFn } from '@angular/common/http';
 
-/** Tenant demo mientras se integra JWT (siguiente paso del roadmap). */
-export const DEMO_TENANT_ID = '11111111-1111-1111-1111-111111111111';
-export const DEMO_ADMIN_USER_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const TOKEN_KEY = 'pos.auth.token';
+
+export function getStoredToken(): string | null {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch { /* ignore */ }
+}
 
 export const tenantHeaderInterceptor: HttpInterceptorFn = (request, next) => {
-  return next(
-    request.clone({
-      setHeaders: {
-        'X-Tenant-Id': DEMO_TENANT_ID,
-        'X-User-Id': DEMO_ADMIN_USER_ID,
-        'X-User-Role': 'ADMIN',
-      },
-    }),
-  );
+  const token = getStoredToken();
+  if (token) {
+    return next(request.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
+  }
+  return next(request);
 };
