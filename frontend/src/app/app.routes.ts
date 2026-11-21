@@ -83,6 +83,18 @@ export const routes: Routes = [
         title: 'Reportes',
         loadComponent: () => import('./features/reports/reports').then(m => m.Reports),
       },
+      {
+        path: 'admin/billing',
+        canActivate: [adminOnlyGuard],
+        title: 'Facturación y suscripción',
+        loadComponent: () => import('./features/billing/billing').then(m => m.Billing),
+      },
+      {
+        path: 'admin/accounting',
+        canActivate: [adminOnlyGuard],
+        title: 'Contabilidad',
+        loadComponent: () => import('./features/accounting/accounting').then(m => m.Accounting),
+      },
     ],
   },
   { path: '**', redirectTo: 'login' },

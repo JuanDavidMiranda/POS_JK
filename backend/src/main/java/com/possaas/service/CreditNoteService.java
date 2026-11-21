@@ -9,6 +9,7 @@ import com.possaas.domain.PosTerminal;
 import com.possaas.domain.Product;
 import com.possaas.domain.Sale;
 import com.possaas.domain.SaleItem;
+import com.possaas.domain.Tenant;
 import com.possaas.dto.CreditNoteItemRequest;
 import com.possaas.dto.CreditNoteItemResponse;
 import com.possaas.dto.CreditNoteRequest;
@@ -21,6 +22,7 @@ import com.possaas.repository.ReturnedQuantity;
 import com.possaas.repository.SaleItemRepository;
 import com.possaas.repository.SaleRepository;
 import com.possaas.repository.ProductRepository;
+import com.possaas.repository.TenantRepository;
 import com.possaas.util.UuidV7;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -53,12 +55,26 @@ public class CreditNoteService {
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
     private final ElectronicBillingProvider billingProvider;
+    private final TenantRepository tenantRepository;
     private final TenantFilterSupport tenantFilterSupport;
 
     @Transactional
     public CreditNoteResponse create(CreditNoteRequest request) {
         UUID tenantId = TenantContext.require();
         tenantFilterSupport.enable(tenantId);
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant no encontrado"));
+        if (!SubscriptionPolicy.canSell(tenant)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "La suscripci?n del comercio est? suspendida. Renueva tu plan para emitir notas cr?dito.");
+        }
+        int used = tenant.getElectronicFoliosUsed() == null ? 0 : tenant.getElectronicFoliosUsed();
+        int limit = tenant.getElectronicFoliosLimit() == null ? 0 : tenant.getElectronicFoliosLimit();
+        if (limit > 0 && used >= limit) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No hay folios electr?nicos disponibles. Recarga folios DIAN para emitir documentos.");
+        }
 
         if (!VALID_REASONS.contains(request.reasonCode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -194,6 +210,8 @@ public class CreditNoteService {
         sale.setStatus(fullReturn ? "VOIDED" : "PARTIALLY_RETURNED");
         saleRepository.save(sale);
         terminalRepository.advanceCreditNoteSequence(tenantId, terminal.getId(), sequence, now);
+        tenant.setElectronicFoliosUsed((tenant.getElectronicFoliosUsed() == null ? 0 : tenant.getElectronicFoliosUsed()) + 1);
+        tenantRepository.save(tenant);
 
         DianCreditNoteResult result = billingProvider.sendCreditNote(tenantId, creditNote, sale);
         creditNote.setDianStatus(result.status() == null ? "REJECTED" : result.status());

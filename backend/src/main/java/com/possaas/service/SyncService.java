@@ -13,11 +13,13 @@ import com.possaas.domain.PosTerminal;
 import com.possaas.domain.Product;
 import com.possaas.domain.Sale;
 import com.possaas.domain.SaleItem;
+import com.possaas.domain.Tenant;
 import com.possaas.dto.CustomerDto;
 import com.possaas.dto.ProductDto;
 import com.possaas.dto.SaleItemPayloadDto;
 import com.possaas.dto.SalePayloadDto;
 import com.possaas.dto.SecurityPolicyDto;
+import com.possaas.dto.SubscriptionSnapshotDto;
 import com.possaas.dto.SupervisorPinDto;
 import com.possaas.dto.SyncEventDto;
 import com.possaas.dto.SyncEventResultDto;
@@ -34,6 +36,7 @@ import com.possaas.repository.ProductRepository;
 import com.possaas.repository.SaleItemRepository;
 import com.possaas.repository.SaleRepository;
 import com.possaas.repository.SyncInboxLogRepository;
+import com.possaas.repository.TenantRepository;
 import com.possaas.repository.UserRepository;
 import com.possaas.util.UuidV7;
 import jakarta.persistence.EntityManager;
@@ -79,6 +82,7 @@ public class SyncService {
     private final SyncInboxLogRepository inboxLogRepository;
     private final SecurityService securityService;
     private final UserRepository userRepository;
+    private final TenantRepository tenantRepository;
     private final ElectronicBillingProvider electronicBillingProvider;
     private final ObjectMapper objectMapper;
 
@@ -136,8 +140,12 @@ public class SyncService {
                 .map(u -> new SupervisorPinDto(u.getId(), u.getFullName(), u.getSupervisorPinHash()))
                 .toList();
 
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant no encontrado"));
+        SubscriptionSnapshotDto subscription = SubscriptionPolicy.snapshot(tenant);
+
         return new SyncPullResponse(Instant.now(), UuidV7.generate(), tenantId, config, products, customers,
-                securityPolicy, supervisorPins);
+                securityPolicy, supervisorPins, subscription);
     }
 
     @Transactional
@@ -182,6 +190,19 @@ public class SyncService {
         SalePayloadDto payload = event.payload();
         validatePayloadBasics(tenantId, event.idempotencyKey(), payload);
 
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant no encontrado"));
+        if (!SubscriptionPolicy.canSell(tenant)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "La suscripción del comercio está suspendida. Renueva tu plan para continuar facturando.");
+        }
+        int used = tenant.getElectronicFoliosUsed() == null ? 0 : tenant.getElectronicFoliosUsed();
+        int limit = tenant.getElectronicFoliosLimit() == null ? 0 : tenant.getElectronicFoliosLimit();
+        if (limit > 0 && used >= limit) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No hay folios electrónicos disponibles. Recarga folios DIAN para continuar facturando.");
+        }
+
         PosTerminal terminal = terminalRepository.findByTenantIdAndIdForUpdate(tenantId, payload.terminalId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "La terminal no pertenece al tenant o no existe"));
@@ -217,6 +238,9 @@ public class SyncService {
         saleItemRepository.saveAll(items);
 
         deductStockAndKardex(tenantId, branch.getId(), sale, payload.items());
+
+        tenant.setElectronicFoliosUsed((tenant.getElectronicFoliosUsed() == null ? 0 : tenant.getElectronicFoliosUsed()) + 1);
+        tenantRepository.save(tenant);
 
         terminalRepository.advanceSequence(tenantId, terminal.getId(), payload.sequenceNumber(), Instant.now());
         return sale;

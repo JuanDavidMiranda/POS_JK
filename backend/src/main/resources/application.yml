@@ -52,3 +52,10 @@ app:
     mode: ${DIAN_MODE:SIMULATED}
     endpoint: ${DIAN_ENDPOINT:}
     api-key: ${DIAN_API_KEY:}
+  wompi:
+    mode: ${WOMPI_MODE:SANDBOX}
+    public-key: ${WOMPI_PUBLIC_KEY:pub_test_placeholder}
+    integrity-secret: ${WOMPI_INTEGRITY_SECRET:integrity_test_placeholder}
+    events-secret: ${WOMPI_EVENTS_SECRET:events_test_placeholder}
+    redirect-url: ${WOMPI_REDIRECT_URL:http://localhost:4200/admin/billing}
+    currency: ${WOMPI_CURRENCY:COP}

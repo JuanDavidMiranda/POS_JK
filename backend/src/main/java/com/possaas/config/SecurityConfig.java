@@ -54,6 +54,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/me").authenticated()
                         .requestMatchers("/api/v1/super-admin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/v1/onboarding/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/billing/**", "/api/v1/accounting/**").hasRole("ADMIN")
                         // Compatibilidad: endpoints tenant/legacy (sync, POS, admin por headers) permanecen accesibles;
                         // los controles finos se mantienen en controladores/servicios existentes.
                         .requestMatchers("/api/**").permitAll()

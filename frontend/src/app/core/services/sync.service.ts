@@ -1,14 +1,15 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+﻿import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, interval } from 'rxjs';
-import { db, lastPullKey, readConfig, requestPersistentStorage, securityPolicyKey, sequenceKey, supervisorPinsKey, terminalConfigKey } from '../db/pos-offline.database';
+import { db, lastPullKey, readConfig, requestPersistentStorage, securityPolicyKey, sequenceKey, subscriptionSnapshotKey, supervisorPinsKey, terminalConfigKey } from '../db/pos-offline.database';
 import { environment } from '../../../environments/environment';
 import {
   type OutboxEvent,
   type PullResponse,
   type PushResponse,
   type SecurityPolicy,
+  type SubscriptionSnapshot,
   type SyncEventResult,
   type TerminalConfig,
 } from '../models/pos.models';
@@ -140,6 +141,10 @@ export class SyncService {
     return readConfig<SecurityPolicy>(securityPolicyKey);
   }
 
+  async subscriptionSnapshot(): Promise<SubscriptionSnapshot | undefined> {
+    return readConfig<SubscriptionSnapshot>(subscriptionSnapshotKey);
+  }
+
   private async applyPull(response: PullResponse): Promise<void> {
     await db.transaction('rw', db.products, db.customers, db.config, async () => {
       await db.products.clear();
@@ -175,6 +180,13 @@ export class SyncService {
         await db.config.put({
           key: supervisorPinsKey,
           value: response.supervisorPins,
+          updatedAt: response.serverTime,
+        });
+      }
+      if (response.subscription) {
+        await db.config.put({
+          key: subscriptionSnapshotKey,
+          value: response.subscription,
           updatedAt: response.serverTime,
         });
       }

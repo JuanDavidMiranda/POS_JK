@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { db, readConfig } from '../../core/db/pos-offline.database';
 import {
   money,
@@ -8,11 +9,13 @@ import {
   type PaymentMethod,
   type Product,
   type SecurityPolicy,
+  type SubscriptionSnapshot,
   type TerminalConfig,
 } from '../../core/models/pos.models';
 import { PosCheckoutService } from '../../core/services/pos-checkout.service';
 import { PinAuthService } from '../../core/services/pin-auth.service';
 import { SyncService } from '../../core/services/sync.service';
+import { AuthService } from '../../core/services/auth.service';
 import { SupervisorPinModal } from '../../shared/components/supervisor-pin-modal/supervisor-pin-modal';
 import { securityPolicyKey } from '../../core/db/pos-offline.database';
 
@@ -27,12 +30,13 @@ type PendingAction =
   templateUrl: './pos.html',
   styleUrl: './pos.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, SupervisorPinModal],
+  imports: [DecimalPipe, RouterLink, SupervisorPinModal],
 })
 export class Pos implements OnInit {
   private readonly checkoutService = inject(PosCheckoutService);
   private readonly pinAuth = inject(PinAuthService);
   readonly sync = inject(SyncService);
+  private readonly auth = inject(AuthService);
 
   readonly products = signal<Product[]>([]);
   readonly query = signal('');
@@ -45,6 +49,15 @@ export class Pos implements OnInit {
     requirePinForVoidItem: true,
     blindCashClose: true,
   });
+  readonly subscription = signal<SubscriptionSnapshot | undefined>(undefined);
+  readonly isSuspended = computed(() => {
+    const sub = this.subscription();
+    return sub?.subscriptionStatus === 'SUSPENDED' || sub?.canSell === false;
+  });
+  readonly isPastDue = computed(() => this.subscription()?.subscriptionStatus === 'PAST_DUE');
+  readonly graceDays = computed(() => this.subscription()?.graceDaysRemaining ?? 0);
+  readonly isAdmin = computed(() => this.auth.user()?.role === 'ADMIN');
+
   readonly feedback = signal('');
   readonly busy = signal(false);
   readonly money = money;
@@ -93,6 +106,7 @@ export class Pos implements OnInit {
   async reload(): Promise<void> {
     this.products.set(await db.products.orderBy('name').toArray());
     this.terminal.set((await this.sync.terminalConfig()) ?? null);
+    this.subscription.set(await this.sync.subscriptionSnapshot());
     const p = await readConfig<SecurityPolicy>(securityPolicyKey);
     if (p) {
       this.policy.set({
@@ -262,6 +276,11 @@ export class Pos implements OnInit {
   }
 
   async cobrar(): Promise<void> {
+    const sub = this.subscription();
+    if (sub?.subscriptionStatus === 'SUSPENDED' || sub?.canSell === false) {
+      this.feedback.set('La suscripción está suspendida. Renueva tu plan para poder crear nuevas ventas.');
+      return;
+    }
     const terminal = this.terminal();
     if (!terminal) {
       this.feedback.set('Esperando la configuración de la terminal (conéctate una vez al inicio).');

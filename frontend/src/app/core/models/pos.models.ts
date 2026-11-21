@@ -1,4 +1,4 @@
-export type TaxType = 'IVA' | 'EXENTO';
+﻿export type TaxType = 'IVA' | 'EXENTO';
 export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA';
 export type SaleStatus = 'OFFLINE_PENDING' | 'SYNCED' | 'REJECTED_CONFLICT' | 'VOIDED' | 'PARTIALLY_RETURNED';
 export type MovementType =
@@ -196,6 +196,19 @@ export interface SyncEventResult {
   message?: string;
 }
 
+export interface SubscriptionSnapshot {
+  planCode: string;
+  subscriptionStatus: string;
+  trialEndsAt?: string | null;
+  subscriptionEndsAt?: string | null;
+  electronicFoliosUsed: number;
+  electronicFoliosLimit: number;
+  electronicFoliosRemaining: number;
+  inGracePeriod: boolean;
+  graceDaysRemaining: number;
+  canSell: boolean;
+}
+
 export interface PullResponse {
   serverTime: string;
   batchId: string;
@@ -205,6 +218,7 @@ export interface PullResponse {
   customers: Customer[];
   securityPolicy?: SecurityPolicy;
   supervisorPins?: SupervisorUser[];
+  subscription?: SubscriptionSnapshot | null;
 }
 
 export interface PushResponse {

@@ -12,6 +12,8 @@ import com.possaas.repository.BranchInventoryRepository;
 import com.possaas.repository.BranchRepository;
 import com.possaas.repository.PosTerminalRepository;
 import com.possaas.repository.ProductRepository;
+import com.possaas.repository.SaasPlanRepository;
+import com.possaas.repository.TenantRepository;
 import com.possaas.util.UuidV7;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,6 +34,8 @@ public class BranchService {
     private final BranchInventoryRepository branchInventoryRepository;
     private final ProductRepository productRepository;
     private final PosTerminalRepository terminalRepository;
+    private final TenantRepository tenantRepository;
+    private final SaasPlanRepository saasPlanRepository;
     private final TenantFilterSupport tenantFilterSupport;
 
     @Transactional(readOnly = true)
@@ -47,6 +51,7 @@ public class BranchService {
     public BranchDtos.BranchResponse createBranch(BranchDtos.BranchRequest request) {
         UUID tenantId = TenantContext.require();
         tenantFilterSupport.enable(tenantId);
+        enforceBranchLimit(tenantId);
         String code = normalizeCode(request.code());
         if (branchRepository.existsByTenantIdAndCode(tenantId, code)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una sede con el código " + code);
@@ -110,6 +115,7 @@ public class BranchService {
     public TerminalDtos.TerminalResponse createTerminal(TerminalDtos.TerminalRequest request) {
         UUID tenantId = TenantContext.require();
         tenantFilterSupport.enable(tenantId);
+        enforceTerminalLimit(tenantId);
         Branch branch = requireActiveBranch(tenantId, request.branchId());
         if (request.rangeTo() < request.rangeFrom()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rangeTo debe ser mayor o igual a rangeFrom");
@@ -227,5 +233,31 @@ public class BranchService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private void enforceBranchLimit(UUID tenantId) {
+        var tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant no encontrado"));
+        int max = saasPlanRepository.findById(tenant.getPlanCode() == null ? "TRIAL" : tenant.getPlanCode())
+                .map(p -> p.getMaxBranches() == null ? Integer.MAX_VALUE : p.getMaxBranches())
+                .orElse(Integer.MAX_VALUE);
+        long current = branchRepository.countByTenantId(tenantId);
+        if (current >= max) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Tu plan permite máximo " + max + " sede(s). Actualiza tu suscripción para crear más sedes.");
+        }
+    }
+
+    private void enforceTerminalLimit(UUID tenantId) {
+        var tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant no encontrado"));
+        int max = saasPlanRepository.findById(tenant.getPlanCode() == null ? "TRIAL" : tenant.getPlanCode())
+                .map(p -> p.getMaxTerminals() == null ? Integer.MAX_VALUE : p.getMaxTerminals())
+                .orElse(Integer.MAX_VALUE);
+        long current = terminalRepository.countByTenantId(tenantId);
+        if (current >= max) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Tu plan permite máximo " + max + " caja(s). Actualiza tu suscripción para crear más cajas.");
+        }
     }
 }

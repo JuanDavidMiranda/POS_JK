@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable } from 'dexie';
+﻿import Dexie, { type EntityTable } from 'dexie';
 import {
   type Branch,
   type CashShiftRecord,
@@ -76,6 +76,7 @@ export const demoTenantKey = 'tenant_id';
 export const securityPolicyKey = 'security_policy';
 export const supervisorPinsKey = 'supervisor_pins';
 export const selectedAdminBranchKey = 'selected_admin_branch_id';
+export const subscriptionSnapshotKey = 'subscription_snapshot';
 
 export async function readConfig<T>(key: string): Promise<T | undefined> {
   const record = await db.config.get(key);

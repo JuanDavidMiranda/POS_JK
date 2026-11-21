@@ -1,0 +1,157 @@
+<div class="space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Suscripción y facturación</h1>
+      <p class="text-sm text-slate-500">Gestiona tu plan, folios DIAN y pagos Wompi.</p>
+    </div>
+    <button type="button" (click)="load()" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">Actualizar</button>
+  </div>
+
+  @if (error()) { <div class="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{{ error() }}</div> }
+  @if (message()) { <div class="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ message() }}</div> }
+
+  @if (loading()) {
+    <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Cargando información de facturación...</div>
+  } @else if (subscription(); as sub) {
+    <section class="grid gap-4 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-sm text-slate-500">Plan actual</p>
+            <h2 class="text-xl font-bold text-slate-800">{{ sub.planName }} <span class="text-sm font-medium text-slate-500">({{ sub.planCode }})</span></h2>
+          </div>
+          <span class="rounded-full px-3 py-1 text-xs font-semibold" [class]="statusClass(sub.subscriptionStatus)">{{ sub.subscriptionStatus }}</span>
+        </div>
+
+        @if (sub.subscriptionStatus === 'PAST_DUE') {
+          <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <strong>Periodo de gracia activo.</strong> Tu suscripción venció; puedes seguir facturando por {{ sub.graceDaysRemaining }} día(s) más.
+            Renueva ahora para evitar la suspensión.
+          </div>
+        }
+        @if (sub.subscriptionStatus === 'SUSPENDED') {
+          <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+            <strong>Servicio suspendido.</strong> No puedes crear nuevas ventas hasta renovar tu suscripción. Reportes, historial y exportación contable siguen disponibles.
+          </div>
+        }
+        @if (sub.subscriptionStatus === 'TRIAL') {
+          <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            Estás en periodo de prueba. @if (sub.trialEndsAt) { Vence: {{ sub.trialEndsAt | date:'mediumDate' }}. }
+          </div>
+        }
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-3 text-sm">
+          <div class="rounded-lg bg-slate-50 p-3">
+            <p class="text-slate-500">Vence / fin</p>
+            <p class="font-semibold text-slate-800">{{ (sub.subscriptionEndsAt || sub.trialEndsAt) ? ((sub.subscriptionEndsAt || sub.trialEndsAt) | date:'mediumDate') : '—' }}</p>
+            <p class="text-xs text-slate-500">{{ sub.daysRemaining }} día(s) restantes</p>
+          </div>
+          <div class="rounded-lg bg-slate-50 p-3 sm:col-span-2">
+            <div class="flex items-center justify-between">
+              <p class="text-slate-500">Folios electrónicos DIAN</p>
+              <p class="font-semibold text-slate-800">{{ sub.electronicFoliosUsed }} / {{ sub.electronicFoliosLimit }} usados</p>
+            </div>
+            <div class="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-200">
+              <div class="h-full rounded-full" [class.bg-emerald-500]="folioPercent() < 80" [class.bg-amber-500]="folioPercent() >= 80 && folioPercent() < 100" [class.bg-rose-500]="folioPercent() >= 100" [style.width.%]="folioPercent()"></div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Disponibles: {{ sub.electronicFoliosRemaining }} folio(s)</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 class="font-semibold text-slate-800">Acciones rápidas</h3>
+        <p class="mt-1 text-sm text-slate-500">Elige un plan o recarga folios para evitar interrupciones.</p>
+        <div class="mt-4 space-y-2 text-sm">
+          <a routerLink="/reportes" class="block rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">Ver reportes (siempre disponible)</a>
+          <a routerLink="/historial" class="block rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50">Historial de ventas</a>
+        </div>
+        <p class="mt-4 text-xs text-slate-500">Modo de pago: <strong>{{ sandbox() ? 'SANDBOX (simulador local)' : 'Wompi' }}</strong></p>
+      </div>
+    </section>
+
+    @if (checkout(); as c) {
+      <section class="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+        <h3 class="font-semibold text-emerald-900">Checkout creado: {{ c.itemName }}</h3>
+        <p class="mt-1 text-sm text-emerald-800">Referencia: <strong>{{ c.reference }}</strong> · Monto: <strong>{{ (c.amountInCents / 100) | currency:'COP':'symbol-narrow':'1.0-0' }}</strong></p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          @if (!c.sandbox) {
+            <button type="button" (click)="openWompiWidget()" class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800">Abrir widget Wompi</button>
+          } @else {
+            <button type="button" (click)="simulate(true)" [disabled]="busy()" class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50">Simular pago aprobado</button>
+            <button type="button" (click)="simulate(false)" [disabled]="busy()" class="rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50">Simular pago rechazado</button>
+          }
+          <button type="button" (click)="cancelCheckout()" class="rounded-md border border-emerald-300 px-4 py-2 text-sm hover:bg-emerald-100">Cerrar</button>
+        </div>
+      </section>
+    }
+
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-lg font-semibold text-slate-800">Planes</h3>
+        <div class="inline-flex rounded-lg border border-slate-200 p-1 text-sm">
+          <button type="button" (click)="cycle.set('MONTHLY')" class="rounded-md px-3 py-1.5" [class.bg-slate-900]="cycle()==='MONTHLY'" [class.text-white]="cycle()==='MONTHLY'">Mensual</button>
+          <button type="button" (click)="cycle.set('ANNUAL')" class="rounded-md px-3 py-1.5" [class.bg-slate-900]="cycle()==='ANNUAL'" [class.text-white]="cycle()==='ANNUAL'">Anual <span class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">2 meses gratis</span></button>
+        </div>
+      </div>
+      <div class="mt-4 grid gap-4 md:grid-cols-3">
+        @for (p of plans(); track p.code) {
+          <article class="flex flex-col rounded-xl border border-slate-200 p-4" [class.border-emerald-400]="p.code === sub.planCode" [class.ring-1]="p.code === sub.planCode" [class.ring-emerald-400]="p.code === sub.planCode">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-slate-800">{{ p.name }}</h4>
+              @if (p.code === sub.planCode) { <span class="text-xs font-medium text-emerald-700">Actual</span> }
+            </div>
+            <p class="mt-2 text-2xl font-bold text-slate-900">{{ planPrice(p.code) | currency:'COP':'symbol-narrow':'1.0-0' }} <span class="text-sm font-normal text-slate-500">/ {{ cycle()==='MONTHLY' ? 'mes' : 'año' }}</span></p>
+            <ul class="mt-3 space-y-1 text-sm text-slate-600">
+              <li>• {{ p.maxBranches }} sede(s)</li>
+              <li>• {{ p.maxTerminals }} caja(s)</li>
+              <li>• {{ p.includedFoliosPerMonth }} folios incluidos / mes</li>
+            </ul>
+            <button type="button" (click)="buyPlan(p.code)" [disabled]="busy()" class="mt-4 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+              {{ cycle()==='MONTHLY' ? 'Suscribirme mensual' : 'Suscribirme anual' }}
+            </button>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 class="text-lg font-semibold text-slate-800">Paquetes de folios DIAN</h3>
+      <div class="mt-4 grid gap-4 sm:grid-cols-3">
+        @for (f of packages(); track f.code) {
+          <article class="rounded-xl border border-slate-200 p-4">
+            <h4 class="font-semibold text-slate-800">{{ f.name }}</h4>
+            <p class="mt-1 text-sm text-slate-500">{{ f.foliosCount }} folios</p>
+            <p class="mt-2 text-xl font-bold text-slate-900">{{ f.priceCop | currency:'COP':'symbol-narrow':'1.0-0' }}</p>
+            <button type="button" (click)="buyFolios(f.code)" [disabled]="busy()" class="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50">Comprar paquete</button>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 class="text-lg font-semibold text-slate-800">Historial de pagos</h3>
+      <div class="mt-3 overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-left text-slate-500">
+            <tr><th class="py-2 pr-3">Fecha</th><th class="py-2 pr-3">Referencia</th><th class="py-2 pr-3">Tipo</th><th class="py-2 pr-3">Ítem</th><th class="py-2 pr-3">Monto</th><th class="py-2 pr-3">Estado</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @for (t of txs(); track t.id) {
+              <tr>
+                <td class="py-2 pr-3 text-slate-600">{{ t.createdAt | date:'short' }}</td>
+                <td class="py-2 pr-3 font-mono text-xs">{{ t.referenceCode }}</td>
+                <td class="py-2 pr-3">{{ t.paymentType }}</td>
+                <td class="py-2 pr-3">{{ t.itemCode }}</td>
+                <td class="py-2 pr-3">{{ t.amountCop | currency:'COP':'symbol-narrow':'1.0-0' }}</td>
+                <td class="py-2 pr-3 font-semibold" [class]="txStatusClass(t.status)">{{ t.status }}</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="py-4 text-center text-slate-500">Sin transacciones registradas.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

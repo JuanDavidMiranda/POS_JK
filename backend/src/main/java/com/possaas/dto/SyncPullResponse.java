@@ -12,6 +12,7 @@ public record SyncPullResponse(
         List<ProductDto> products,
         List<CustomerDto> customers,
         SecurityPolicyDto securityPolicy,
-        List<SupervisorPinDto> supervisorPins
+        List<SupervisorPinDto> supervisorPins,
+        SubscriptionSnapshotDto subscription
 ) {
 }

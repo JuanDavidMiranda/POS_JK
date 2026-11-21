@@ -54,6 +54,8 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
             """)
     List<TenantCounts> countsForTenants(@Param("ids") List<UUID> ids);
 
+    List<Tenant> findBySubscriptionStatusIn(java.util.Collection<String> statuses);
+
     interface TenantCounts {
         UUID getTenantId();
         long getBranchCount();
